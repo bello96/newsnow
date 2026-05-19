@@ -5,9 +5,12 @@ export function verifyCronToken(expected: string | undefined, header: string | u
   if (!header) {
     return false
   }
-  const m = header.match(/^Bearer (.+)$/)
-  if (!m) {
+  if (!header.startsWith("Bearer ")) {
     return false
   }
-  return m[1] === expected
+  const token = header.slice(7).trimStart()
+  if (!token) {
+    return false
+  }
+  return token === expected
 }

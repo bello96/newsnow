@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: "archive not available" })
   }
 
-  const days = Math.max(1, Number(getQuery(event).days ?? 30))
+  const days = Math.max(1, Number(getQuery(event).days) || 30)
   const cutoff = Date.now() - days * 86400 * 1000
   await archive.cleanup(cutoff)
   logger.success(`cron cleanup: removed older than ${days}d`)
