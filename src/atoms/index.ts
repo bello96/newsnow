@@ -1,21 +1,7 @@
 import type { FixedColumnID, SourceID } from "@shared/types"
 import type { Update } from "./types"
 
-export const focusSourcesAtom = atom((get) => {
-  return get(primitiveMetadataAtom).data.focus
-}, (get, set, update: Update<SourceID[]>) => {
-  const _ = update instanceof Function ? update(get(focusSourcesAtom)) : update
-  set(primitiveMetadataAtom, {
-    updatedTime: Date.now(),
-    action: "manual",
-    data: {
-      ...get(primitiveMetadataAtom).data,
-      focus: _,
-    },
-  })
-})
-
-export const currentColumnIDAtom = atom<FixedColumnID>("focus")
+export const currentColumnIDAtom = atom<FixedColumnID>("hottest")
 
 export const currentSourcesAtom = atom((get) => {
   const id = get(currentColumnIDAtom)

@@ -68,19 +68,12 @@ ENABLE_CACHE=true
 ```
 
 ### 数据库支持
-本项目主推 Cloudflare Pages 以及 Docker 部署， Vercel 需要你自行搞定数据库，其他支持的数据库可以查看 https://db0.unjs.io/connectors 。
+本项目主推 Cloudflare Pages 部署， Vercel 需要你自行搞定数据库，其他支持的数据库可以查看 https://db0.unjs.io/connectors 。
 
 1. 在 Cloudflare Worker 控制面板创建 D1 数据库
 2. 在 `wrangler.toml` 中配置 `database_id` 和 `database_name`
 3. 若无 `wrangler.toml` ，可将 `example.wrangler.toml` 重命名并修改配置
 4. 重新部署生效
-
-### Docker 部署
-对于 Docker 部署，只需要项目根目录 `docker-compose.yaml` 文件，同一目录下执行
-```
-docker compose up
-```
-同样可以通过 `docker-compose.yaml` 配置环境变量。
 
 ## 开发
 > [!Note]

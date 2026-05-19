@@ -58,6 +58,4 @@ const comprehensiveNews = defineSource(async () => {
   }))
 })
 
-export default defineSource({
-  "tencent-hot": comprehensiveNews,
-})
+export default comprehensiveNews

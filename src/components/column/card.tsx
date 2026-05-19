@@ -4,7 +4,6 @@ import { AnimatePresence, motion, useInView } from "framer-motion"
 import { useWindowSize } from "react-use"
 import { forwardRef, useImperativeHandle } from "react"
 import { OverlayScrollbar } from "../common/overlay-scrollbar"
-import { safeParseString } from "~/utils"
 
 export interface ItemsProps extends React.HTMLAttributes<HTMLDivElement> {
   id: SourceID
@@ -60,8 +59,6 @@ function NewsCard({ id, setHandleRef }: NewsCardProps) {
       const headers: Record<string, any> = {}
       if (refetchSources.has(id)) {
         url = `/s?id=${id}&latest`
-        const jwt = safeParseString(localStorage.getItem("jwt"))
-        if (jwt) headers.Authorization = `Bearer ${jwt}`
         refetchSources.delete(id)
       } else if (cacheSources.has(id)) {
         // wait animation
@@ -102,8 +99,6 @@ function NewsCard({ id, setHandleRef }: NewsCardProps) {
     retry: false,
   })
 
-  const { isFocused, toggleFocus } = useFocusWith(id)
-
   return (
     <>
       <div className={$("flex justify-between mx-2 mt-0 mb-2 items-center")}>
@@ -135,11 +130,6 @@ function NewsCard({ id, setHandleRef }: NewsCardProps) {
             type="button"
             className={$("btn i-ph:arrow-counter-clockwise-duotone", isFetching && "animate-spin i-ph:circle-dashed-duotone")}
             onClick={() => refresh(id)}
-          />
-          <button
-            type="button"
-            className={$("btn", isFocused ? "i-ph:star-fill" : "i-ph:star-duotone")}
-            onClick={toggleFocus}
           />
           {/* firefox cannot drag a button */}
           {setHandleRef && (

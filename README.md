@@ -82,16 +82,6 @@ Supported database connectors: https://db0.unjs.io/connectors
 3. If wrangler.toml doesn't exist, rename example.wrangler.toml and modify configurations
 4. Changes will take effect on next deployment
 
-### Docker Deployment
-
-In project root directory:
-
-```sh
-docker compose up
-```
-
-You can also set Environment Variables in `docker-compose.yml`.
-
 ## Development
 
 > [!Note]

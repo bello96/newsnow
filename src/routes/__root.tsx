@@ -9,7 +9,6 @@ import { Header } from "~/components/header"
 import { GlobalOverlayScrollbar } from "~/components/common/overlay-scrollbar"
 import { Footer } from "~/components/footer"
 import { Toast } from "~/components/common/toast"
-import { SearchBar } from "~/components/common/search-bar"
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
@@ -27,7 +26,6 @@ function NotFoundComponent() {
 
 function RootComponent() {
   useOnReload()
-  useSync()
   usePWA()
   return (
     <>
@@ -65,7 +63,6 @@ function RootComponent() {
         </footer>
       </GlobalOverlayScrollbar>
       <Toast />
-      <SearchBar />
       {import.meta.env.DEV && (
         <>
           <ReactQueryDevtools buttonPosition="bottom-left" />

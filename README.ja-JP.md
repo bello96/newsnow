@@ -73,15 +73,6 @@ ENABLE_CACHE=true
 3. `wrangler.toml` が存在しない場合、 `example.wrangler.toml` をリネームして設定を変更
 4. 次回デプロイ時に変更が反映
 
-### Dockerデプロイ
-プロジェクトルートディレクトリで：
-
-```sh
-docker compose up
- ```
-
-環境変数は `docker-compose.yml` でも設定可能。
-
 ## 開発
 > [!TIP]
 > Node.js >= 20が必要
