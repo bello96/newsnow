@@ -21,7 +21,14 @@ export function ResultView() {
   }
   return (
     <article className="prose prose-sm dark:prose-invert max-w-none p-4 border rounded-lg">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{result.text}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ children, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer">{children}</a>,
+        }}
+      >
+        {result.text}
+      </ReactMarkdown>
     </article>
   )
 }

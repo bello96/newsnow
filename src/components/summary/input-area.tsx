@@ -12,6 +12,7 @@ export function InputArea() {
     const reader = new FileReader()
     reader.onload = () => setText(String(reader.result ?? ""))
     reader.readAsText(file, "utf-8")
+    e.target.value = ""
   }
 
   return (

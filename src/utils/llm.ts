@@ -1,4 +1,4 @@
-import { ofetch } from "ofetch"
+import { myFetch } from "~/utils"
 import type { LLMConfig } from "~/atoms/summary"
 
 export interface ChatMessage {
@@ -14,7 +14,7 @@ export async function chat(config: LLMConfig, messages: ChatMessage[]): Promise<
   if (!config.apiKey) {
     throw new Error("请先在配置中填写 LLM API key")
   }
-  const res = await ofetch<ChatResponse>("/api/llm/chat", {
+  const res = await myFetch<ChatResponse>("llm/chat", {
     method: "POST",
     body: {
       apiKey: config.apiKey,
