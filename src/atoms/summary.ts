@@ -7,10 +7,17 @@ export interface LLMConfig {
   model: string
 }
 
+export const MODEL_OPTIONS = [
+  "deepseek-v4-flash",
+  "deepseek-v4-pro",
+  "deepseek-chat",
+  "deepseek-reasoner",
+] as const
+
 export const llmConfigAtom = atomWithStorage<LLMConfig>("newsnow-llm-config", {
   apiKey: "",
   baseUrl: "https://api.deepseek.com",
-  model: "deepseek-chat",
+  model: "deepseek-v4-pro",
 })
 
 export const summaryRequirementAtom = atom<string>("")

@@ -1,5 +1,5 @@
 import { useAtom } from "jotai"
-import { llmConfigAtom } from "~/atoms/summary"
+import { MODEL_OPTIONS, llmConfigAtom } from "~/atoms/summary"
 
 export function ConfigDialog({ open, onClose }: { open: boolean, onClose: () => void }) {
   const [config, setConfig] = useAtom(llmConfigAtom)
@@ -27,13 +27,22 @@ export function ConfigDialog({ open, onClose }: { open: boolean, onClose: () => 
           placeholder="https://api.deepseek.com"
         />
         <label className="block text-sm mb-1">Model</label>
-        <input
-          type="text"
-          className="w-full p-2 mb-3 border rounded bg-transparent"
+        <select
+          className="w-full p-2 mb-3 border rounded bg-base"
           value={config.model}
           onChange={e => setConfig({ ...config, model: e.target.value })}
-          placeholder="deepseek-chat"
-        />
+        >
+          {MODEL_OPTIONS.map(m => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+          {!MODEL_OPTIONS.includes(config.model as typeof MODEL_OPTIONS[number]) && (
+            <option value={config.model}>
+              {config.model}
+              {" "}
+              (custom)
+            </option>
+          )}
+        </select>
         <div className="text-xs op-60 mb-2">
           Key 保存在浏览器 localStorage，仅在调用时通过本站后端代理转发到上述 Base URL。
         </div>
