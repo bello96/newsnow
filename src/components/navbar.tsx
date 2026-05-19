@@ -25,8 +25,9 @@ export function NavBar() {
       ))}
       <Link
         to="/summary"
-        className="px-2 hover:(bg-primary/10 rounded-md) cursor-pointer transition-all op-70 dark:op-90"
-        activeProps={{ className: "px-2 color-primary font-bold" }}
+        className="px-2 hover:(bg-primary/10 rounded-md) cursor-pointer transition-all"
+        inactiveProps={{ className: "op-70 dark:op-90" }}
+        activeProps={{ className: "color-primary font-bold" }}
       >
         汇总
       </Link>

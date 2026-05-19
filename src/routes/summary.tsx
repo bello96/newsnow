@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { useState } from "react"
-import { useAtomValue, useSetAtom } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import { ConfigDialog } from "~/components/summary/config-dialog"
 import { InputArea } from "~/components/summary/input-area"
 import { ResultView } from "~/components/summary/result-view"
@@ -30,7 +30,7 @@ function SummaryPage() {
   const [configOpen, setConfigOpen] = useState(false)
   const config = useAtomValue(llmConfigAtom)
   const requirement = useAtomValue(summaryRequirementAtom)
-  const setResult = useSetAtom(summaryResultAtom)
+  const [result, setResult] = useAtom(summaryResultAtom)
 
   const onAnalyze = async () => {
     if (!config.apiKey) {
@@ -87,9 +87,10 @@ function SummaryPage() {
           <button
             type="button"
             onClick={onAnalyze}
-            className="px-4 py-1 rounded bg-primary/20 hover:bg-primary/30 text-sm font-bold"
+            disabled={result.loading}
+            className="px-4 py-1 rounded bg-primary/20 hover:bg-primary/30 text-sm font-bold disabled:op-50 disabled:cursor-not-allowed disabled:hover:bg-primary/20"
           >
-            开始分析
+            {result.loading ? "分析中..." : "开始分析"}
           </button>
         </div>
       </div>
