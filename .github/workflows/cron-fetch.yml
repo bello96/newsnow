@@ -1,0 +1,17 @@
+name: Cron Fetch
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call fetch endpoint
+        run: |
+          curl -fsS -X POST "${{ secrets.PROD_URL }}/api/cron/fetch" \
+            -H "Authorization: Bearer ${{ secrets.CRON_TOKEN }}" \
+            --max-time 90

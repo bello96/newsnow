@@ -1,0 +1,17 @@
+name: Cron Cleanup
+
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call cleanup endpoint
+        run: |
+          curl -fsS -X POST "${{ secrets.PROD_URL }}/api/cron/cleanup?days=30" \
+            -H "Authorization: Bearer ${{ secrets.CRON_TOKEN }}" \
+            --max-time 30
