@@ -106,79 +106,74 @@ pnpm dev
 
 加上 `?latest=true` 可跳过 TTL 软兜底（任何用户都可，不需登录）。
 
-## 新闻汇总 (AI 总结)
+## 信息速递员 - 定时口播稿生成 + 邮件投递
 
 ### 工作流
 
 ```
-GitHub Actions (cron)
-  └─ 每 2 小时  POST /api/cron/fetch
-       └─ 遍历全部 12 个数据源 → upsert 到 news_archive 表
-            (source_id, news_id) 主键冲突时仅更新 last_seen，保留 first_seen
-
-用户访问 /summary
-  └─ 前端拉取  GET /api/archive?from=今日00:00&to=now
-       └─ 拿到当日全量新闻列表
-            └─ 连同用户在 .md 文件里定义的格式模板，一起发到 LLM
-                 └─ 返回结构化 Markdown 总结
+GitHub Actions
+  ├─ 每 2 小时  POST /api/cron/fetch     → 抓取 12 源新闻 upsert 到 news_archive
+  ├─ 每日 02:00  POST /api/cron/cleanup  → 删除 30 天前归档
+  └─ 每小时整点  POST /api/cron/analyze
+        ├─ 检查 user_settings.enabled
+        ├─ 检查当前北京小时 == user_settings.send_hour
+        ├─ 检查 last_sent_date != 今日
+        ├─ 拉今日 news_archive 全量
+        ├─ 调 LLM（内嵌 server/assets/prompts/douyin.md 作 system prompt）
+        ├─ 调 Resend HTTP API 发邮件到 to_email
+        └─ 写 analysis_history + markSent
 ```
 
-### 配置 LLM
+### 一次性配置
 
-1. 访问 `/summary` 页面
-2. 点击右上角 **配置** 按钮
-3. 在弹窗中填写：
-   - **API Key**：你的 LLM 服务密钥
-   - **Base URL**：默认 `https://api.deepseek.com`（支持任何 OpenAI 兼容服务）
-   - **Model**：默认 `deepseek-chat`
+1. **GitHub Secrets** (Settings → Secrets and variables → Actions)：
+   - `PROD_URL` = 部署域名
+   - `CRON_TOKEN` = `openssl rand -hex 16` 生成的 32 字符
 
-配置保存在浏览器 `localStorage`，不上传服务器。调用时由前端 POST 到 `/api/llm/chat`，后端仅做无状态代理转发，**不存储、不记录密钥**。
+2. **Cloudflare Pages env**（D1 binding `NEWSNOW_DB` + 以下变量）：
+   - `CRON_TOKEN`（同 GH）
+   - `INIT_TABLE=true`、`ENABLE_CACHE=true`
 
-兼容 OpenAI 协议的服务均可使用，例如 [DeepSeek](https://platform.deepseek.com)、[Moonshot](https://platform.moonshot.cn) 等。
+3. **Resend** (resend.com)：
+   - 注册账号 → API key
+   - Add domain → `dengjiabei.cn`（或你的域名）
+   - 按提示加 SPF / DKIM / DMARC 三条 DNS 记录到 Cloudflare
+   - 等 Resend 验证通过
 
-### GitHub Actions / Cloudflare Pages 配置
+4. **浏览器** 访问 `/summary` → 点配置 → 填写：
+   - 管理 Token = 上面的 `CRON_TOKEN`
+   - LLM API Key / Model（deepseek-v4-pro 等）
+   - Resend API Key / 发件邮箱（如 `news@dengjiabei.cn`）/ 收件邮箱
+   - 发送小时（北京时间 0-23）
+   - 勾选「启用定时」→ 保存
 
-部署汇总功能需要配置以下密钥：
+### 编辑 prompt 模板
 
-**GitHub 仓库 → Settings → Secrets and variables → Actions**
+prompt 在 `server/assets/prompts/douyin.md`，作为 server-side asset 编译进 Nitro。修改后必须重新部署生效（`pnpm run deploy`）。
 
-| Secret | 说明 |
-|---|---|
-| `PROD_URL` | 部署的完整域名，例如 `https://new.dengjiabei.cn` |
-| `CRON_TOKEN` | 随机 32 字符，推荐用 `openssl rand -hex 16` 生成 |
+### 数据库表
 
-**Cloudflare Pages 项目 → Settings → Environment variables**
-
-| 变量 | 说明 |
-|---|---|
-| `CRON_TOKEN` | **与 GitHub Secret 保持一致** |
-
-Cron 调度时间（UTC）：
-
-| 任务 | 表达式 | 对应北京时间 |
-|---|---|---|
-| 抓取新闻 | `0 */2 * * *` | 每 2 小时 |
-| 清理归档 | `0 18 * * *` | 每日 02:00 |
-
-### 数据库表 `news_archive`
-
+**`news_archive`** — 跨次抓取累积去重的新闻库
 ```sql
 CREATE TABLE news_archive (
-  source_id TEXT NOT NULL,
-  news_id   TEXT NOT NULL,
-  title     TEXT NOT NULL,
-  url       TEXT NOT NULL,
-  pub_date  INTEGER,
-  extra     TEXT,
-  first_seen INTEGER NOT NULL,
-  last_seen  INTEGER NOT NULL,
+  source_id TEXT, news_id TEXT, title TEXT, url TEXT,
+  pub_date INTEGER, extra TEXT,
+  first_seen INTEGER, last_seen INTEGER,
   PRIMARY KEY (source_id, news_id)
 );
 ```
 
-- `(source_id, news_id)` 联合主键，`ON CONFLICT DO UPDATE` 实现累积去重
-- `first_seen` 首次抓取时写入，之后不变；`last_seen` 每次抓取时更新
-- cleanup 任务默认删除 **30 天前**的数据
+**`user_settings`** — 单行表，存运行时配置（LLM key、Resend key、邮箱、定时小时等）。CHECK 约束保证只有一行。
+
+**`analysis_history`** — 历史口播稿。每次 cron/analyze（含 dryRun）都会插入一行，记录 text、模型、新闻条数、邮件状态。
+
+### Cron 调度（UTC）
+
+| 任务 | 表达式 | 北京时间 |
+|---|---|---|
+| 抓取新闻 | `0 */2 * * *` | 每 2 小时 |
+| 清理归档 | `0 18 * * *` | 每日 02:00 |
+| 生成 + 发邮件 | `0 * * * *` | 每小时整点（命中 send_hour 才执行） |
 
 ## 项目结构
 

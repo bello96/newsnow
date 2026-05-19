@@ -130,31 +130,52 @@ Cloudflare Pages 推荐：
 2. 在 Cloudflare 控制台建 D1 数据库，回填 `database_id`
 3. `pnpm deploy`
 
-## 新功能：汇总（AI 总结）
+## 新功能：信息速递员（定时口播稿 + 邮件投递）
 
-### 约定 1：`news_archive` 表用 upsert，永远不要 `INSERT OR REPLACE`
+### 架构
 
-- `cache` 表是**覆盖式**（实时新闻列表，每次刷新替换），`news_archive` 是**累积式**（解决覆盖问题，保留全天记录）
-- `Archive.upsert` 使用 `ON CONFLICT(source_id, news_id) DO UPDATE` 语义：保留 `first_seen`，仅更新 `last_seen` 等字段
-- **不要**添加 `Archive.set` 或 `INSERT OR REPLACE` 实现——会把 `first_seen` 覆盖掉，破坏全日累积
+```
+GH Actions cron (每小时整点) → POST /api/cron/analyze
+  ↓ 后端读 user_settings → 检查窗口 → 拉 archive → 调 LLM → Resend 发邮件 → 写 history
+```
 
-### 约定 2：`/api/cron/*` 必须经过 `verifyCronToken`
+前端 `/summary` 只剩配置弹窗 + 试运行按钮 + 历史列表，没有输入框/上传——所有规范都在 `server/assets/prompts/douyin.md` 写死。
 
-- `server/utils/auth.ts` 的 `verifyCronToken(expected, header)` 负责解析并校验 Bearer token
-- `expected` 未配置（空字符串 / undefined）时**永远拒绝**（fail-closed 策略）
-- **任何新增的 cron endpoint** 必须在函数第一行完成鉴权，再做任何其他操作
+### 约定 1：`news_archive` 用 upsert，永远不要 `INSERT OR REPLACE`
 
-### 约定 3：`/api/llm/chat` 是无状态代理，不存 key
+- `cache` 表覆盖式（实时列表用），`news_archive` 累积式（cron 抓取累计去重）
+- `Archive.upsert` 用 `ON CONFLICT(source_id, news_id) DO UPDATE`，保留 `first_seen` 仅更新 `last_seen` 等
 
-- 用户的 API Key 由前端从 `localStorage` 读取，每次调用时 POST 到代理 endpoint
-- 后端透传到 `body.baseUrl`（默认 `https://api.deepseek.com`）的 `/v1/chat/completions`
-- 后端**不得** log / cache / 持久化 key——违反此约定会造成密钥泄露
+### 约定 2：`/api/cron/*` + `/api/settings` + `/api/history` 全部用 `verifyCronToken` 鉴权
 
-### 约定 4：新增源后，cron fetch 自动覆盖
+- `server/utils/auth.ts` 负责 Bearer 校验，复用同一个 `CRON_TOKEN`
+- expected 未配置时永远拒绝（fail-closed）
+- 任何新增的 admin / cron endpoint 必须**第一行**完成鉴权
 
-- `server/api/cron/fetch.post.ts` 遍历 `Object.keys(getters)`，由 glob 自动收集全部 source
-- 新增源**不需要**修改任何 cron yaml 文件
-- 但新源依然需要执行 `pnpm run presource` 重新生成 `shared/sources.json`
+### 约定 3：`user_settings` 是单行表（id=1）
+
+- 用 `INSERT OR IGNORE` 初始化默认行，业务约定单行
+- `Settings.put` 内置 `id` 过滤，禁止改 PK
+- `markSent(date)` 是定时任务防重发的唯一标志（不是用 timestamps 判断）
+
+### 约定 4：定时 cron 窗口判断在服务端
+
+- GH Actions 每小时整点触发，**不影响 send_hour 配置改动的生效**
+- 后端用「当前北京小时 == settings.send_hour && last_sent_date != 今日北京日期」判断
+- 改 send_hour 立即生效，无需 push / 重部署
+
+### 约定 5：prompt 模板作为 server asset
+
+- `server/assets/prompts/douyin.md` 编译时打包进 Nitro storage
+- 运行时通过 `useStorage("assets:server").getItem("prompts/douyin.md")` 读
+- 改 prompt **必须重新部署**才生效（无法热更新）
+- 不要内嵌为 .ts 字符串常量——反引号 escape 痛苦且历史不易追溯
+
+### 约定 6：Resend 邮件 from 地址必须经过域名验证
+
+- 服务端不验证 from 邮箱合法性，直接透传给 Resend
+- 域名未验证时 Resend 返回 422，前端展示给用户
+- 文档约定 `news@dengjiabei.cn`（已在 Resend Add domain 验证）
 
 ## 不要做什么
 
