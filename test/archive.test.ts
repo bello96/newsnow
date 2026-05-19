@@ -44,4 +44,21 @@ describe("archive", () => {
     const rows = await archive.range(0, 9999, ["zhihu"])
     expect(rows.map(r => r.newsId)).toEqual(["new"])
   })
+
+  it("upsert 字符串 pubDate 被解析为数字", async () => {
+    await archive.upsert("zhihu", [
+      { id: "n1", title: "T1", url: "u", pubDate: "2026-05-19T10:00:00Z" },
+    ], 1000)
+    const rows = await archive.range(0, 9999, ["zhihu"])
+    expect(typeof rows[0].pubDate).toBe("number")
+    expect(rows[0].pubDate).toBe(Date.parse("2026-05-19T10:00:00Z"))
+  })
+
+  it("upsert 写入 extra 字段后 range 返回原始 JSON 字符串", async () => {
+    await archive.upsert("zhihu", [
+      { id: "n1", title: "T1", url: "u", extra: { info: "hot", diff: 5 } },
+    ], 1000)
+    const rows = await archive.range(0, 9999, ["zhihu"])
+    expect(rows[0].extra).toBe(JSON.stringify({ info: "hot", diff: 5 }))
+  })
 })

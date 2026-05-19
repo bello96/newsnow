@@ -33,6 +33,7 @@ export class Archive {
     await this.db.prepare(`
       CREATE INDEX IF NOT EXISTS idx_archive_first_seen ON news_archive(first_seen);
     `).run()
+    logger.success("init archive table")
   }
 
   async upsert(sourceId: SourceID, items: NewsItem[], now: number) {
@@ -65,6 +66,15 @@ export class Archive {
       WHERE first_seen >= ? AND first_seen <= ?${whereSrc}
       ORDER BY first_seen DESC
     `).all(...params) as any
+    /**
+     * https://developers.cloudflare.com/d1/build-with-d1/d1-client-api/#return-object
+     * cloudflare d1 .all() will return
+     * {
+     *   success: boolean
+     *   meta:
+     *   results:
+     * }
+     */
     const rows = (res.results ?? res) as any[]
     return rows.map(r => ({
       sourceId: r.source_id as SourceID,
