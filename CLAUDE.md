@@ -130,6 +130,32 @@ Cloudflare Pages 推荐：
 2. 在 Cloudflare 控制台建 D1 数据库，回填 `database_id`
 3. `pnpm deploy`
 
+## 新功能：汇总（AI 总结）
+
+### 约定 1：`news_archive` 表用 upsert，永远不要 `INSERT OR REPLACE`
+
+- `cache` 表是**覆盖式**（实时新闻列表，每次刷新替换），`news_archive` 是**累积式**（解决覆盖问题，保留全天记录）
+- `Archive.upsert` 使用 `ON CONFLICT(source_id, news_id) DO UPDATE` 语义：保留 `first_seen`，仅更新 `last_seen` 等字段
+- **不要**添加 `Archive.set` 或 `INSERT OR REPLACE` 实现——会把 `first_seen` 覆盖掉，破坏全日累积
+
+### 约定 2：`/api/cron/*` 必须经过 `verifyCronToken`
+
+- `server/utils/auth.ts` 的 `verifyCronToken(expected, header)` 负责解析并校验 Bearer token
+- `expected` 未配置（空字符串 / undefined）时**永远拒绝**（fail-closed 策略）
+- **任何新增的 cron endpoint** 必须在函数第一行完成鉴权，再做任何其他操作
+
+### 约定 3：`/api/llm/chat` 是无状态代理，不存 key
+
+- 用户的 API Key 由前端从 `localStorage` 读取，每次调用时 POST 到代理 endpoint
+- 后端透传到 `body.baseUrl`（默认 `https://api.deepseek.com`）的 `/v1/chat/completions`
+- 后端**不得** log / cache / 持久化 key——违反此约定会造成密钥泄露
+
+### 约定 4：新增源后，cron fetch 自动覆盖
+
+- `server/api/cron/fetch.post.ts` 遍历 `Object.keys(getters)`，由 glob 自动收集全部 source
+- 新增源**不需要**修改任何 cron yaml 文件
+- 但新源依然需要执行 `pnpm run presource` 重新生成 `shared/sources.json`
+
 ## 不要做什么
 
 - 不要把 `.npmrc` 入库（仅本地 workaround）
@@ -177,6 +203,32 @@ src/
 │   └── primitiveMetadataAtom.ts  localStorage 持久化
 ├── hooks/                useRefetch / usePWA / useToast / useRelativeTime
 └── utils/
+
+新增（汇总功能）：
+
+server/
+├── api/
+│   ├── cron/
+│   │   ├── fetch.post.ts       定时抓取 endpoint（Bearer token 鉴权）
+│   │   └── cleanup.post.ts     30 天前归档清理
+│   ├── archive.get.ts          归档查询（前端用）
+│   └── llm/
+│       └── chat.post.ts        OpenAI 兼容 LLM 代理
+├── database/archive.ts         news_archive 表 CRUD + getArchiveTable 工厂
+└── utils/auth.ts               verifyCronToken Bearer 校验
+
+src/
+├── routes/summary.tsx          /summary 路由，AI 总结主页
+├── components/summary/
+│   ├── config-dialog.tsx       LLM 配置弹窗
+│   ├── input-area.tsx          .md 上传 + 文本输入
+│   └── result-view.tsx         react-markdown 渲染
+├── atoms/summary.ts            LLM 配置 / 输入 / 结果 atoms
+└── utils/llm.ts                chat() 调用 /api/llm/chat 的工具
+
+.github/workflows/
+├── cron-fetch.yml              每 2 小时 cron
+└── cron-cleanup.yml            每日 cron
 ```
 
 ## Commit 规范
