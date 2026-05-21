@@ -17,8 +17,23 @@ describe("settings", () => {
     expect(row.id).toBe(1)
     expect(row.llmModel).toBe("deepseek-v4-pro")
     expect(row.sendHour).toBe(7)
+    expect(row.sendMinute).toBe(0)
     expect(row.enabled).toBe(0)
     expect(row.subjectTemplate).toBe("今日口播稿 - {date}")
+  })
+
+  it("put sendMinute 后 get 能取回", async () => {
+    await settings.put({ sendHour: 20, sendMinute: 30 })
+    const row = await settings.get()
+    expect(row.sendHour).toBe(20)
+    expect(row.sendMinute).toBe(30)
+  })
+
+  it("init 重复执行不报错（ALTER TABLE 兼容旧库）", async () => {
+    await settings.init()
+    await settings.init()
+    const row = await settings.get()
+    expect(row.id).toBe(1)
   })
 
   it("put 部分字段，其他字段保持不变", async () => {

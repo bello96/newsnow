@@ -12,6 +12,7 @@ export interface UserSettings {
   toEmail: string
   subjectTemplate: string
   sendHour: number
+  sendMinute: number
   enabled: number
   lastSentDate: string | null
   updatedAt: number
@@ -27,6 +28,7 @@ const DEFAULTS: Omit<UserSettings, "id" | "lastSentDate" | "updatedAt"> = {
   toEmail: "",
   subjectTemplate: "今日口播稿 - {date}",
   sendHour: 7,
+  sendMinute: 0,
   enabled: 0,
 }
 
@@ -42,6 +44,7 @@ function toCamel(row: any): UserSettings {
     toEmail: row.to_email ?? "",
     subjectTemplate: row.subject_template ?? "",
     sendHour: row.send_hour ?? 0,
+    sendMinute: row.send_minute ?? 0,
     enabled: row.enabled ?? 0,
     lastSentDate: row.last_sent_date ?? null,
     updatedAt: row.updated_at ?? 0,
@@ -58,6 +61,7 @@ const SNAKE_MAP: Record<keyof Omit<UserSettings, "id">, string> = {
   toEmail: "to_email",
   subjectTemplate: "subject_template",
   sendHour: "send_hour",
+  sendMinute: "send_minute",
   enabled: "enabled",
   lastSentDate: "last_sent_date",
   updatedAt: "updated_at",
@@ -79,11 +83,17 @@ export class Settings {
         to_email TEXT NOT NULL DEFAULT '',
         subject_template TEXT NOT NULL DEFAULT '今日口播稿 - {date}',
         send_hour INTEGER NOT NULL DEFAULT 7,
+        send_minute INTEGER NOT NULL DEFAULT 0,
         enabled INTEGER NOT NULL DEFAULT 0,
         last_sent_date TEXT,
         updated_at INTEGER NOT NULL DEFAULT 0
       );
     `).run()
+    try {
+      await this.db.prepare(`ALTER TABLE user_settings ADD COLUMN send_minute INTEGER NOT NULL DEFAULT 0`).run()
+    } catch {
+      // 列已存在则忽略；兼容旧库 schema 升级
+    }
     await this.db.prepare(`
       INSERT OR IGNORE INTO user_settings (id, updated_at) VALUES (1, ?)
     `).run(Date.now())

@@ -12,6 +12,7 @@ export interface UserSettings {
   toEmail: string
   subjectTemplate: string
   sendHour: number
+  sendMinute: number
   enabled: number
   lastSentDate: string | null
   updatedAt: number

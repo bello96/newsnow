@@ -12,7 +12,8 @@ function getBeijingYmdAndHour(nowMs: number) {
   const beijing = new Date(nowMs + BEIJING_OFFSET_MS)
   const ymd = beijing.toISOString().slice(0, 10)
   const hour = beijing.getUTCHours()
-  return { ymd, hour }
+  const minute = beijing.getUTCMinutes()
+  return { ymd, hour, minute }
 }
 
 function getBeijingMidnightUtcMs(nowMs: number) {
@@ -48,14 +49,23 @@ export default defineEventHandler(async (event) => {
 
   const settings = await settingsTable.get()
   const now = Date.now()
-  const { ymd: today, hour: beijingHour } = getBeijingYmdAndHour(now)
+  const { ymd: today, hour: beijingHour, minute: beijingMinute } = getBeijingYmdAndHour(now)
 
   if (!dryRun) {
     if (!settings.enabled) {
       return { skip: "disabled", now, today }
     }
-    if (beijingHour !== settings.sendHour) {
-      return { skip: "not_in_window", beijingHour, sendHour: settings.sendHour }
+    const targetMin = settings.sendHour * 60 + settings.sendMinute
+    const currMin = beijingHour * 60 + beijingMinute
+    const delta = currMin - targetMin
+    if (delta < 0 || delta >= 30) {
+      return {
+        skip: "not_in_window",
+        beijingHour,
+        beijingMinute,
+        sendHour: settings.sendHour,
+        sendMinute: settings.sendMinute,
+      }
     }
     if (settings.lastSentDate === today) {
       return { skip: "already_sent", today }
@@ -154,6 +164,7 @@ export default defineEventHandler(async (event) => {
     dryRun,
     today,
     beijingHour,
+    beijingMinute,
     text,
     newsCount: items.length,
     emailStatus,

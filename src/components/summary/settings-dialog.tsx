@@ -15,6 +15,7 @@ const EMPTY_SETTINGS: UserSettings = {
   toEmail: "",
   subjectTemplate: "今日口播稿 - {date}",
   sendHour: 7,
+  sendMinute: 0,
   enabled: 0,
   lastSentDate: null,
   updatedAt: 0,
@@ -75,6 +76,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
           toEmail: draft.toEmail,
           subjectTemplate: draft.subjectTemplate,
           sendHour: draft.sendHour,
+          sendMinute: draft.sendMinute,
           enabled: draft.enabled,
         },
       })
@@ -217,17 +219,27 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
             />
             启用定时（每小时触发的 cron 会检查此开关）
           </label>
-          <label className={labelCls}>发送小时 (北京时间 0-23)</label>
-          <input
-            type="number"
-            min={0}
-            max={23}
-            className={inputCls}
-            value={draft.sendHour}
-            onChange={e => setDraft({ ...draft, sendHour: Math.max(0, Math.min(23, Number(e.target.value) || 0)) })}
-          />
+          <label className={labelCls}>发送时间（北京时间，30 分钟粒度）</label>
+          <select
+            className={`${inputCls} bg-base`}
+            value={`${String(draft.sendHour).padStart(2, "0")}:${String(draft.sendMinute).padStart(2, "0")}`}
+            onChange={(e) => {
+              const [h, m] = e.target.value.split(":").map(Number)
+              setDraft({ ...draft, sendHour: h, sendMinute: m })
+            }}
+          >
+            {Array.from({ length: 48 }, (_, i) => {
+              const h = Math.floor(i / 2)
+              const m = i % 2 === 0 ? 0 : 30
+              const label = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+              return <option key={label} value={label}>{label}</option>
+            })}
+          </select>
+          <div className="text-xs op-50 mt-1">
+            实际触发可能延迟最多 5-10 分钟（受 GitHub Actions 调度影响）
+          </div>
           {draft.lastSentDate && (
-            <div className="text-xs op-60">
+            <div className="text-xs op-60 mt-2">
               上次发送：
               {draft.lastSentDate}
             </div>
