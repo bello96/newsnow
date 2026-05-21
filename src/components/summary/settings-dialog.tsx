@@ -41,7 +41,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
     return null
   }
 
-  const inputCls = "w-full p-2 border border-primary/20 rounded bg-primary/10 text-sm focus:outline-none focus:border-primary focus:bg-primary/15 transition-colors"
+  const inputCls = "w-full p-2 border border-primary/20 rounded bg-zinc-200/60 dark:bg-zinc-700/40 text-sm focus:outline-none focus:border-primary transition-colors"
   const labelCls = "block text-xs op-70 mb-1"
 
   return (

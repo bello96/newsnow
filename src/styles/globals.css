@@ -49,6 +49,23 @@ button:disabled {
   user-select: none;
 }
 
+/* 让原生 select/input dropdown 跟随当前主题 */
+select,
+input,
+textarea {
+  color-scheme: light dark;
+}
+
+html.dark select option {
+  background-color: #1f2024;
+  color: #e5e7eb;
+}
+
+html:not(.dark) select option {
+  background-color: #ffffff;
+  color: #111827;
+}
+
 #dropdown-menu li {
   --at-apply: hover:bg-neutral-400/10 rounded-md flex items-center p-1 gap-1;
 }
