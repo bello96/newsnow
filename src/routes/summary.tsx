@@ -5,7 +5,7 @@ import { SettingsDialog } from "~/components/summary/settings-dialog"
 import { HistoryList } from "~/components/summary/history-list"
 import { ResultView } from "~/components/summary/result-view"
 import { summaryResultAtom } from "~/atoms/summary"
-import { historyAtom, llmConfigAtom } from "~/atoms/settings"
+import { historyAtom, llmSettingsAtom } from "~/atoms/settings"
 import type { HistoryRow } from "~/atoms/settings"
 import { apiFetch, llmFetch } from "~/utils/api"
 
@@ -19,22 +19,23 @@ export const Route = createFileRoute("/summary")({ component: SummaryPage })
 
 function SummaryPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const config = useAtomValue(llmConfigAtom)
+  const settings = useAtomValue(llmSettingsAtom)
   const [result, setResult] = useAtom(summaryResultAtom)
   const setHistory = useSetAtom(historyAtom)
 
   const onAnalyze = async () => {
-    if (!config.apiKey) {
+    const cfg = settings.providers[settings.activeProvider]
+    if (!cfg || !cfg.apiKey) {
       setSettingsOpen(true)
       return
     }
     setResult({ loading: true, text: "" })
     try {
-      const data = await llmFetch<AnalyzeResponse>("analyze", config.apiKey, {
+      const data = await llmFetch<AnalyzeResponse>("analyze", cfg.apiKey, {
         method: "POST",
         body: {
-          baseUrl: config.baseUrl,
-          model: config.model,
+          baseUrl: cfg.baseUrl,
+          model: cfg.model,
         },
       })
       setResult({ loading: false, text: data.text })

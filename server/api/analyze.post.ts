@@ -2,6 +2,7 @@ import { ofetch } from "ofetch"
 import { getArchiveTable } from "#/database/archive"
 import { getHistoryTable } from "#/database/history"
 import { getDouyinSystemPrompt } from "#/prompts/douyin"
+import { joinChatCompletionsUrl } from "#/utils/llm-url"
 
 const BEIJING_OFFSET_MS = 8 * 3600 * 1000
 
@@ -37,8 +38,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody<AnalyzeBody>(event).catch<AnalyzeBody>(() => ({}))
-  const baseUrl = ((body && body.baseUrl) || "https://api.deepseek.com").replace(/\/$/, "")
+  const baseUrl = (body && body.baseUrl) || "https://api.deepseek.com"
   const model = (body && body.model) || "deepseek-v4-pro"
+  const chatUrl = joinChatCompletionsUrl(baseUrl)
 
   const archiveTable = await getArchiveTable()
   const historyTable = await getHistoryTable()
@@ -62,7 +64,7 @@ export default defineEventHandler(async (event) => {
   let text = ""
   try {
     const llmRes = await ofetch<LLMChatResponse>(
-      `${baseUrl}/v1/chat/completions`,
+      chatUrl,
       {
         method: "POST",
         headers: {
