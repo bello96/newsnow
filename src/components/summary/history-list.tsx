@@ -1,23 +1,13 @@
-import { useAtom, useAtomValue } from "jotai"
+import { useAtom } from "jotai"
 import { useEffect, useState } from "react"
-import { adminTokenAtom, historyAtom } from "~/atoms/settings"
+import { historyAtom } from "~/atoms/settings"
 import type { HistoryRow } from "~/atoms/settings"
-import { authedFetch } from "~/utils/api"
+import { apiFetch } from "~/utils/api"
 
 function formatTime(ms: number): string {
   const d = new Date(ms + 8 * 3600 * 1000)
   const pad = (n: number) => String(n).padStart(2, "0")
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`
-}
-
-function statusIcon(s: string) {
-  if (s === "sent") {
-    return <span className="text-green-500">✓ 已发</span>
-  }
-  if (s === "failed") {
-    return <span className="text-red-500">✗ 失败</span>
-  }
-  return <span className="op-60">⊘ 试运行</span>
 }
 
 function HistoryItem({ row }: { row: HistoryRow }) {
@@ -39,12 +29,14 @@ function HistoryItem({ row }: { row: HistoryRow }) {
       <div className="flex items-center justify-between text-sm">
         <div className="flex items-center gap-3">
           <span className="font-mono op-70">{formatTime(row.generatedAt)}</span>
-          {statusIcon(row.emailStatus)}
           {row.newsCount && (
             <span className="op-60">
               {row.newsCount}
               条素材
             </span>
+          )}
+          {row.model && (
+            <span className="op-50 text-xs">{row.model}</span>
           )}
         </div>
         <div className="flex gap-2">
@@ -64,12 +56,6 @@ function HistoryItem({ row }: { row: HistoryRow }) {
           </button>
         </div>
       </div>
-      {row.emailError && (
-        <div className="mt-2 text-xs text-red-500">
-          错误：
-          {row.emailError}
-        </div>
-      )}
       {expanded
         ? (
             <pre className="mt-3 text-sm whitespace-pre-wrap font-sans op-90">{row.text}</pre>
@@ -85,27 +71,20 @@ function HistoryItem({ row }: { row: HistoryRow }) {
 }
 
 export function HistoryList() {
-  const token = useAtomValue(adminTokenAtom)
   const [history, setHistory] = useAtom(historyAtom)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
   useEffect(() => {
-    if (!token) {
-      return
-    }
     void load()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token])
+  }, [])
 
   async function load() {
-    if (!token) {
-      return
-    }
     setLoading(true)
     setError("")
     try {
-      const data = await authedFetch<{ count: number, items: HistoryRow[] }>("history?limit=7", token)
+      const data = await apiFetch<{ count: number, items: HistoryRow[] }>("history?limit=7")
       setHistory(data.items)
     } catch (e: any) {
       setError(e?.message || "加载失败")
@@ -114,9 +93,6 @@ export function HistoryList() {
     }
   }
 
-  if (!token) {
-    return <div className="p-4 text-sm op-50">填写管理 Token 后显示历史记录</div>
-  }
   if (loading && history.length === 0) {
     return <div className="p-4 text-sm op-70">加载中...</div>
   }

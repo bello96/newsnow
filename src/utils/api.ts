@@ -2,23 +2,30 @@ import { $fetch } from "ofetch"
 
 const baseFetch = $fetch.create({
   baseURL: "/api",
-  timeout: 30000,
+  timeout: 240000,
   retry: 0,
 })
 
-export async function authedFetch<T>(
+export async function apiFetch<T>(
   path: string,
-  token: string,
   opts: Parameters<typeof baseFetch>[1] = {},
 ): Promise<T> {
-  if (!token) {
-    throw new Error("请先在配置中填写管理 Token")
+  return await baseFetch(path, opts) as T
+}
+
+export async function llmFetch<T>(
+  path: string,
+  llmKey: string,
+  opts: Parameters<typeof baseFetch>[1] = {},
+): Promise<T> {
+  if (!llmKey) {
+    throw new Error("请先在配置中填写 LLM API Key")
   }
   return await baseFetch(path, {
     ...opts,
     headers: {
       ...(opts?.headers ?? {}),
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${llmKey}`,
     },
   }) as T
 }

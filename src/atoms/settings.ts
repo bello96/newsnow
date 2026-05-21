@@ -1,21 +1,10 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 
-export interface UserSettings {
-  id: number
-  llmApiKey: string
-  llmBaseUrl: string
-  llmModel: string
-  resendApiKey: string
-  fromEmail: string
-  fromName: string
-  toEmail: string
-  subjectTemplate: string
-  sendHour: number
-  sendMinute: number
-  enabled: number
-  lastSentDate: string | null
-  updatedAt: number
+export interface LLMConfig {
+  apiKey: string
+  baseUrl: string
+  model: string
 }
 
 export interface HistoryRow {
@@ -36,6 +25,11 @@ export const MODEL_OPTIONS = [
   "deepseek-reasoner",
 ] as const
 
-export const adminTokenAtom = atomWithStorage<string>("newsnow-admin-token", "")
-export const settingsAtom = atom<UserSettings | null>(null)
+const DEFAULT_LLM_CONFIG: LLMConfig = {
+  apiKey: "",
+  baseUrl: "https://api.deepseek.com",
+  model: "deepseek-v4-pro",
+}
+
+export const llmConfigAtom = atomWithStorage<LLMConfig>("newsnow-llm-config", DEFAULT_LLM_CONFIG)
 export const historyAtom = atom<HistoryRow[]>([])

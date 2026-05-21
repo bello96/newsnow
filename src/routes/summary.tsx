@@ -5,41 +5,41 @@ import { SettingsDialog } from "~/components/summary/settings-dialog"
 import { HistoryList } from "~/components/summary/history-list"
 import { ResultView } from "~/components/summary/result-view"
 import { summaryResultAtom } from "~/atoms/summary"
-import { adminTokenAtom, historyAtom } from "~/atoms/settings"
+import { historyAtom, llmConfigAtom } from "~/atoms/settings"
 import type { HistoryRow } from "~/atoms/settings"
-import { authedFetch } from "~/utils/api"
+import { apiFetch, llmFetch } from "~/utils/api"
 
 interface AnalyzeResponse {
-  dryRun: boolean
   text: string
   newsCount: number
-  emailStatus: string
-  emailError: string | null
-  today: string
-  beijingHour: number
+  model: string
 }
 
 export const Route = createFileRoute("/summary")({ component: SummaryPage })
 
 function SummaryPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const token = useAtomValue(adminTokenAtom)
+  const config = useAtomValue(llmConfigAtom)
   const [result, setResult] = useAtom(summaryResultAtom)
   const setHistory = useSetAtom(historyAtom)
 
   const onAnalyze = async () => {
-    if (!token) {
+    if (!config.apiKey) {
       setSettingsOpen(true)
       return
     }
     setResult({ loading: true, text: "" })
     try {
-      const data = await authedFetch<AnalyzeResponse>("cron/analyze?dryRun=true", token, {
+      const data = await llmFetch<AnalyzeResponse>("analyze", config.apiKey, {
         method: "POST",
+        body: {
+          baseUrl: config.baseUrl,
+          model: config.model,
+        },
       })
       setResult({ loading: false, text: data.text })
       try {
-        const h = await authedFetch<{ count: number, items: HistoryRow[] }>("history?limit=7", token)
+        const h = await apiFetch<{ count: number, items: HistoryRow[] }>("history?limit=7")
         setHistory(h.items)
       } catch {
         // 历史刷新失败不影响主流程
@@ -68,12 +68,12 @@ function SummaryPage() {
             disabled={result.loading}
             className="px-4 py-1 rounded bg-primary/20 hover:bg-primary/30 text-sm font-bold disabled:op-50 disabled:cursor-not-allowed disabled:hover:bg-primary/20"
           >
-            {result.loading ? "生成中..." : "试运行（仅生成不发邮件）"}
+            {result.loading ? "生成中..." : "生成今日总结"}
           </button>
         </div>
       </div>
       <div className="text-xs op-60">
-        定时任务每天根据「配置 - 发送小时」自动生成并发邮件；此处的「试运行」用于实时调试，不计入定时窗口。
+        点「生成今日总结」让大模型从今日累积的新闻里挑出爆点生成口播稿。API Key 仅保存在浏览器本地。
       </div>
       <ResultView />
       <div className="mt-2">
