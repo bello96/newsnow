@@ -103,7 +103,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
     return null
   }
 
-  const inputCls = "w-full p-2 border rounded bg-transparent text-sm focus:outline-none focus:border-primary transition-colors"
+  const inputCls = "w-full p-2 border border-primary/20 rounded bg-primary/5 text-sm focus:outline-none focus:border-primary focus:bg-primary/8 transition-colors"
   const labelCls = "block text-xs op-70 mb-1"
   const fieldCls = "mb-3"
 
@@ -196,7 +196,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
               <div className={fieldCls}>
                 <label className={labelCls}>Model</label>
                 <select
-                  className={`${inputCls} bg-base`}
+                  className={inputCls}
                   value={draft.llmModel}
                   onChange={e => setDraft({ ...draft, llmModel: e.target.value })}
                 >
@@ -297,7 +297,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
               <div className={fieldCls}>
                 <label className={labelCls}>发送时间（北京时间，每 30 分钟）</label>
                 <select
-                  className={`${inputCls} bg-base`}
+                  className={inputCls}
                   value={`${String(draft.sendHour).padStart(2, "0")}:${String(draft.sendMinute).padStart(2, "0")}`}
                   onChange={(e) => {
                     const [h, m] = e.target.value.split(":").map(Number)

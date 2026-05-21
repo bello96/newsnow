@@ -21,9 +21,6 @@ html.dark {
 
 body {
   --at-apply: color-base bg-base sprinkle-primary text-base;
-  -moz-user-select: none;
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 button:disabled {
@@ -45,6 +42,10 @@ button:disabled {
 
 *, a, button {
   cursor: default;
+}
+
+.grabbing,
+.grabbing * {
   user-select: none;
 }
 
