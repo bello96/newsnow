@@ -89,7 +89,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
           </select>
         </div>
 
-        <div className="flex justify-end gap-2 mt-4 pt-3 border-t">
+        <div className="flex justify-end gap-2 mt-4">
           <button
             type="button"
             onClick={onClose}
