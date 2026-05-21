@@ -1,5 +1,6 @@
 import process from "node:process"
 import { getArchiveTable } from "#/database/archive"
+import { getHistoryTable } from "#/database/history"
 
 export default defineEventHandler(async (event) => {
   const auth = getHeader(event, "authorization")
@@ -7,14 +8,27 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: "Unauthorized" })
   }
 
+  const q = getQuery(event)
+  const archiveDays = Math.max(1, Number(q.archiveDays) || 30)
+  const historyDays = Math.max(1, Number(q.historyDays) || 7)
+  const now = Date.now()
+
   const archive = await getArchiveTable()
-  if (!archive) {
-    throw createError({ statusCode: 500, message: "archive not available" })
+  const history = await getHistoryTable()
+  if (!archive || !history) {
+    throw createError({ statusCode: 500, message: "database not available" })
   }
 
-  const days = Math.max(1, Number(getQuery(event).days) || 30)
-  const cutoff = Date.now() - days * 86400 * 1000
-  await archive.cleanup(cutoff)
-  logger.success(`cron cleanup: removed older than ${days}d`)
-  return { cutoff, days }
+  const archiveCutoff = now - archiveDays * 86400 * 1000
+  const historyCutoff = now - historyDays * 86400 * 1000
+  await archive.cleanup(archiveCutoff)
+  await history.cleanup(historyCutoff)
+
+  logger.success(`cron cleanup: archive>${archiveDays}d, history>${historyDays}d`)
+  return {
+    archiveDays,
+    historyDays,
+    archiveCutoff,
+    historyCutoff,
+  }
 })

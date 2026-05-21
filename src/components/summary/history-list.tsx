@@ -25,7 +25,7 @@ function HistoryItem({ row }: { row: HistoryRow }) {
   }
 
   return (
-    <li className="border rounded p-3 mb-2">
+    <li className="border border-primary/15 rounded p-3 mb-2">
       <div className="flex items-center justify-between text-sm">
         <div className="flex items-center gap-3">
           <span className="font-mono op-70">{formatTime(row.generatedAt)}</span>
