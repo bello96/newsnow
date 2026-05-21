@@ -9,9 +9,17 @@ export interface ProviderConfig {
   model: string
 }
 
+export interface EmailConfig {
+  enabled: boolean
+  toEmail: string
+  sendHour: number
+  sendMinute: number
+}
+
 export interface LLMSettings {
   activeProvider: ProviderId
   providers: Record<ProviderId, ProviderConfig>
+  email: EmailConfig
 }
 
 export interface ProviderPreset {
@@ -54,9 +62,17 @@ function buildDefaultProviders(): Record<ProviderId, ProviderConfig> {
   return out
 }
 
+const DEFAULT_EMAIL: EmailConfig = {
+  enabled: false,
+  toEmail: "",
+  sendHour: 7,
+  sendMinute: 0,
+}
+
 const DEFAULT_SETTINGS: LLMSettings = {
   activeProvider: "deepseek",
   providers: buildDefaultProviders(),
+  email: DEFAULT_EMAIL,
 }
 
 export interface HistoryRow {

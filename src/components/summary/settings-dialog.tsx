@@ -1,22 +1,27 @@
 import { useAtom } from "jotai"
 import { useEffect, useState } from "react"
 import { PROVIDER_PRESETS, llmSettingsAtom } from "~/atoms/settings"
-import type { LLMSettings, ProviderId } from "~/atoms/settings"
+import type { EmailConfig, LLMSettings, ProviderId } from "~/atoms/settings"
+import { apiFetch } from "~/utils/api"
 
 export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () => void }) {
   const [settings, setSettings] = useAtom(llmSettingsAtom)
   const [draft, setDraft] = useState<LLMSettings>(settings)
   const [activeTab, setActiveTab] = useState<ProviderId>(settings.activeProvider)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
 
   useEffect(() => {
     if (open) {
       setDraft(settings)
       setActiveTab(settings.activeProvider)
+      setError("")
     }
   }, [open, settings])
 
   const activePreset = PROVIDER_PRESETS.find(p => p.id === activeTab)!
   const cfg = draft.providers[activeTab]
+  const email = draft.email
 
   function setCfg<K extends keyof typeof cfg>(key: K, value: typeof cfg[K]) {
     setDraft({
@@ -28,9 +33,40 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
     })
   }
 
-  function save() {
-    setSettings({ ...draft, activeProvider: activeTab })
-    onClose()
+  function setEmail<K extends keyof EmailConfig>(key: K, value: EmailConfig[K]) {
+    setDraft({ ...draft, email: { ...email, [key]: value } })
+  }
+
+  async function save() {
+    setSaving(true)
+    setError("")
+    const next: LLMSettings = { ...draft, activeProvider: activeTab }
+    try {
+      const activeCfg = next.providers[next.activeProvider]
+      const body: Record<string, any> = {
+        enabled: next.email.enabled ? 1 : 0,
+        toEmail: next.email.toEmail,
+        sendHour: next.email.sendHour,
+        sendMinute: next.email.sendMinute,
+      }
+      if (next.email.enabled) {
+        body.llmApiKey = activeCfg.apiKey
+        body.llmBaseUrl = activeCfg.baseUrl
+        body.llmModel = activeCfg.model
+      } else {
+        body.llmApiKey = ""
+      }
+      await apiFetch<{ ok: boolean }>("settings", {
+        method: "PUT",
+        body,
+      })
+      setSettings(next)
+      onClose()
+    } catch (e: any) {
+      setError(e?.message || "保存失败，请重试")
+    } finally {
+      setSaving(false)
+    }
   }
 
   function resetBaseUrl() {
@@ -47,13 +83,13 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="bg-base p-5 rounded-xl w-full max-w-md"
+        className="bg-base p-5 rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold flex items-center gap-2">
             <span className="i-ph:robot" />
-            LLM 配置
+            配置
           </h3>
           <button
             type="button"
@@ -66,7 +102,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
         </div>
 
         <div className="text-xs op-60 mb-4 p-3 bg-primary/5 rounded">
-          API Key 仅保存在浏览器本地。保存后会使用「当前选中」的供应商进行分析。
+          API Key 仅保存在浏览器本地；开启定时邮件后，将上传到服务器以便定时调用。
         </div>
 
         <div className="flex p-1 bg-primary/5 rounded-lg mb-4">
@@ -143,6 +179,73 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
           </select>
         </div>
 
+        <div className="mt-5 pt-3 border-t border-primary/15">
+          <label className={$([
+            "flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-colors mb-3",
+            email.enabled ? "bg-primary/15" : "bg-primary/5 hover:bg-primary/10",
+          ])}
+          >
+            <input
+              type="checkbox"
+              checked={email.enabled}
+              onChange={e => setEmail("enabled", e.target.checked)}
+            />
+            <span className="text-sm font-medium flex items-center gap-1">
+              <span className="i-ph:envelope-simple" />
+              开启定时邮件发送
+            </span>
+            <span className="ml-auto text-xs">
+              {email.enabled
+                ? <span className="color-primary">● 已开启</span>
+                : <span className="op-50">○ 关闭</span>}
+            </span>
+          </label>
+
+          {email.enabled && (
+            <>
+              <div className="mb-3">
+                <label className={labelCls}>收件邮箱</label>
+                <input
+                  type="email"
+                  className={inputCls}
+                  value={email.toEmail}
+                  onChange={e => setEmail("toEmail", e.target.value)}
+                  placeholder="your@email.com"
+                />
+              </div>
+              <div className="mb-3">
+                <label className={labelCls}>发送时间（北京时间，每 30 分钟）</label>
+                <select
+                  className={inputCls}
+                  value={`${String(email.sendHour).padStart(2, "0")}:${String(email.sendMinute).padStart(2, "0")}`}
+                  onChange={(e) => {
+                    const [h, m] = e.target.value.split(":").map(Number)
+                    setDraft({ ...draft, email: { ...email, sendHour: h, sendMinute: m } })
+                  }}
+                >
+                  {Array.from({ length: 48 }, (_, i) => {
+                    const h = Math.floor(i / 2)
+                    const m = i % 2 === 0 ? 0 : 30
+                    const label = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+                    return <option key={label} value={label}>{label}</option>
+                  })}
+                </select>
+              </div>
+              <div className="text-xs op-50">
+                到点后服务器自动用「当前 Provider 配置」生成口播稿并发到该邮箱。
+                实际触发可能延迟 5-10 分钟（GitHub Actions 调度）。
+              </div>
+            </>
+          )}
+        </div>
+
+        {error && (
+          <div className="mt-3 p-2 text-sm text-red-500 bg-red-500/10 rounded">
+            <span className="i-ph:warning-circle inline-block align-middle mr-1" />
+            {error}
+          </div>
+        )}
+
         <div className="flex justify-end gap-2 mt-4">
           <button
             type="button"
@@ -154,11 +257,10 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
           <button
             type="button"
             onClick={save}
-            className="px-4 py-1.5 rounded bg-primary/20 hover:bg-primary/30 text-sm font-bold"
+            disabled={saving}
+            className="px-4 py-1.5 rounded bg-primary/20 hover:bg-primary/30 text-sm font-bold disabled:op-50"
           >
-            保存并使用
-            {" "}
-            {activePreset.name}
+            {saving ? "保存中..." : `保存并使用 ${activePreset.name}`}
           </button>
         </div>
       </div>

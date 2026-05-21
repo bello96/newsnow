@@ -1,0 +1,16 @@
+name: Cron Analyze
+
+on:
+  schedule:
+    - cron: '0,30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger analyze endpoint
+        run: |
+          curl -fsS -X POST "${{ secrets.PROD_URL }}/api/cron/analyze" \
+            --max-time 240 || true
