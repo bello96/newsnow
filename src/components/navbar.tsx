@@ -4,15 +4,16 @@ import { currentColumnIDAtom } from "~/atoms"
 
 export function NavBar() {
   const currentId = useAtomValue(currentColumnIDAtom)
-  const pathname = useRouterState({ select: s => s.location.pathname })
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
   const onColumnRoute = !pathname.startsWith("/summary")
   return (
-    <span className={$([
-      "flex p-3 rounded-2xl bg-primary/1 text-sm",
-      "shadow shadow-primary/20 hover:shadow-primary/50 transition-shadow-500",
-    ])}
+    <span
+      className={$([
+        "flex p-3 rounded-2xl bg-primary/1 text-sm",
+        "shadow shadow-primary/20 hover:shadow-primary/50 transition-shadow-500",
+      ])}
     >
-      {fixedColumnIds.map(columnId => (
+      {fixedColumnIds.map((columnId) => (
         <Link
           key={columnId}
           to="/c/$column"
@@ -31,7 +32,7 @@ export function NavBar() {
         inactiveProps={{ className: "op-70 dark:op-90" }}
         activeProps={{ className: "color-primary font-bold" }}
       >
-        汇总
+        分析
       </Link>
     </span>
   )
