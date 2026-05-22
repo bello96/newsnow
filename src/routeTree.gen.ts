@@ -12,8 +12,8 @@
 
 import { Route as rootRoute } from './routes/__root'
 import { Route as SummaryImport } from './routes/summary'
-import { Route as IndexImport } from './routes/index'
 import { Route as ColumnImport } from './routes/$column'
+import { Route as IndexImport } from './routes/index'
 
 // Create/Update Routes
 
@@ -23,15 +23,15 @@ const SummaryRoute = SummaryImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
-const IndexRoute = IndexImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRoute,
-} as any)
-
 const ColumnRoute = ColumnImport.update({
   id: '/$column',
   path: '/$column',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const IndexRoute = IndexImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -46,18 +46,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexImport
       parentRoute: typeof rootRoute
     }
-    '/summary': {
-      id: '/summary'
-      path: '/summary'
-      fullPath: '/summary'
-      preLoaderRoute: typeof SummaryImport
-      parentRoute: typeof rootRoute
-    }
     '/$column': {
       id: '/$column'
       path: '/$column'
       fullPath: '/$column'
       preLoaderRoute: typeof ColumnImport
+      parentRoute: typeof rootRoute
+    }
+    '/summary': {
+      id: '/summary'
+      path: '/summary'
+      fullPath: '/summary'
+      preLoaderRoute: typeof SummaryImport
       parentRoute: typeof rootRoute
     }
   }
@@ -67,42 +67,42 @@ declare module '@tanstack/react-router' {
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/summary': typeof SummaryRoute
   '/$column': typeof ColumnRoute
+  '/summary': typeof SummaryRoute
 }
 
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/summary': typeof SummaryRoute
   '/$column': typeof ColumnRoute
+  '/summary': typeof SummaryRoute
 }
 
 export interface FileRoutesById {
   __root__: typeof rootRoute
   '/': typeof IndexRoute
-  '/summary': typeof SummaryRoute
   '/$column': typeof ColumnRoute
+  '/summary': typeof SummaryRoute
 }
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/summary' | '/$column'
+  fullPaths: '/' | '/$column' | '/summary'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/summary' | '/$column'
-  id: '__root__' | '/' | '/summary' | '/$column'
+  to: '/' | '/$column' | '/summary'
+  id: '__root__' | '/' | '/$column' | '/summary'
   fileRoutesById: FileRoutesById
 }
 
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  SummaryRoute: typeof SummaryRoute
   ColumnRoute: typeof ColumnRoute
+  SummaryRoute: typeof SummaryRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  SummaryRoute: SummaryRoute,
   ColumnRoute: ColumnRoute,
+  SummaryRoute: SummaryRoute,
 }
 
 export const routeTree = rootRoute
@@ -116,18 +116,18 @@ export const routeTree = rootRoute
       "filePath": "__root.tsx",
       "children": [
         "/",
-        "/summary",
-        "/$column"
+        "/$column",
+        "/summary"
       ]
     },
     "/": {
       "filePath": "index.tsx"
     },
-    "/summary": {
-      "filePath": "summary.tsx"
-    },
     "/$column": {
       "filePath": "$column.tsx"
+    },
+    "/summary": {
+      "filePath": "summary.tsx"
     }
   }
 }

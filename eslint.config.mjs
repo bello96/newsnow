@@ -8,7 +8,12 @@ export default ourongxing({
   files: ["src/**"],
 })).append({
   rules: {
-    // 关闭单参数箭头函数括号校验：与 Prettier 默认 arrowParens:"always" 冲突，保存时来回打架
+    // 以下均为格式化类规则，与项目所用 Prettier 冲突（编辑器保存时来回打架），统一交给 Prettier 处理
     "style/arrow-parens": "off",
+    "style/member-delimiter-style": "off",
+    "style/operator-linebreak": "off",
+    "style/multiline-ternary": "off",
+    "style/jsx-one-expression-per-line": "off",
+    "style/jsx-curly-newline": "off",
   },
 })

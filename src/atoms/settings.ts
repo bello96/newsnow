@@ -1,14 +1,17 @@
 import { atom } from "jotai"
 import { atomWithStorage, createJSONStorage } from "jotai/utils"
 
-export type ProviderId = "deepseek" | "zhipu" | "kimi"
 export type ScheduleMode = "daily" | "once"
 
 export const MAX_RECIPIENTS = 5
 
-export interface ProviderConfig {
+// DeepSeek 固定配置：baseUrl 确定，不再让用户填写
+export const DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+export const DEEPSEEK_MODELS = ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-flash", "deepseek-v4-pro"]
+export const DEFAULT_MODEL = "deepseek-v4-pro"
+
+export interface LLMConfig {
   apiKey: string
-  baseUrl: string
   model: string
 }
 
@@ -22,49 +25,8 @@ export interface EmailConfig {
 }
 
 export interface LLMSettings {
-  activeProvider: ProviderId
-  providers: Record<ProviderId, ProviderConfig>
+  llm: LLMConfig
   email: EmailConfig
-}
-
-export interface ProviderPreset {
-  id: ProviderId
-  name: string
-  baseUrl: string
-  models: string[]
-  defaultModel: string
-}
-
-export const PROVIDER_PRESETS: ProviderPreset[] = [
-  {
-    id: "deepseek",
-    name: "DeepSeek",
-    baseUrl: "https://api.deepseek.com",
-    models: ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-flash", "deepseek-v4-pro"],
-    defaultModel: "deepseek-v4-pro",
-  },
-  {
-    id: "zhipu",
-    name: "智谱",
-    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
-    models: ["glm-4-flash", "glm-4-air", "glm-4-plus", "glm-4-long", "glm-4.5", "glm-4.5-air"],
-    defaultModel: "glm-4-flash",
-  },
-  {
-    id: "kimi",
-    name: "Kimi",
-    baseUrl: "https://api.moonshot.cn/v1",
-    models: ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k", "kimi-k2-0905-preview"],
-    defaultModel: "moonshot-v1-32k",
-  },
-]
-
-function buildDefaultProviders(): Record<ProviderId, ProviderConfig> {
-  const out = {} as Record<ProviderId, ProviderConfig>
-  for (const p of PROVIDER_PRESETS) {
-    out[p.id] = { apiKey: "", baseUrl: p.baseUrl, model: p.defaultModel }
-  }
-  return out
 }
 
 const DEFAULT_EMAIL: EmailConfig = {
@@ -77,8 +39,7 @@ const DEFAULT_EMAIL: EmailConfig = {
 }
 
 const DEFAULT_SETTINGS: LLMSettings = {
-  activeProvider: "deepseek",
-  providers: buildDefaultProviders(),
+  llm: { apiKey: "", model: DEFAULT_MODEL },
   email: DEFAULT_EMAIL,
 }
 
@@ -93,18 +54,26 @@ export interface HistoryRow {
   emailError: string | null
 }
 
-// 兼容旧版 localStorage：单个 toEmail → toEmails[]，并补齐新增字段
+// 兼容旧版 localStorage：
+// - 旧多 Provider 结构（providers.deepseek / activeProvider）→ 单一 llm
+// - 旧单个 toEmail → toEmails[]
 function migrate(raw: any): LLMSettings {
   if (!raw || typeof raw !== "object") {
     return DEFAULT_SETTINGS
+  }
+  const llmSrc = (raw.llm && typeof raw.llm === "object")
+    ? raw.llm
+    : (raw.providers?.deepseek ?? {})
+  const llm: LLMConfig = {
+    apiKey: typeof llmSrc.apiKey === "string" ? llmSrc.apiKey : "",
+    model: typeof llmSrc.model === "string" && llmSrc.model ? llmSrc.model : DEFAULT_MODEL,
   }
   const email = (raw.email && typeof raw.email === "object") ? raw.email : {}
   const toEmails = Array.isArray(email.toEmails)
     ? email.toEmails.filter((e: any) => typeof e === "string")
     : (typeof email.toEmail === "string" && email.toEmail ? [email.toEmail] : [])
   return {
-    activeProvider: raw.activeProvider ?? "deepseek",
-    providers: { ...buildDefaultProviders(), ...(raw.providers ?? {}) },
+    llm,
     email: {
       enabled: !!email.enabled,
       toEmails,
