@@ -108,6 +108,15 @@ export const originSources = {
     title: "综合早报",
     interval: Time.Common,
   },
+  aihot: {
+    name: "AIHOT",
+    title: "AI 热点",
+    type: "hottest",
+    column: "tech",
+    color: "purple",
+    home: "https://aihot.virxact.com",
+    interval: Time.Common,
+  },
 } as const satisfies Record<string, OriginSource>
 
 export function genSources() {

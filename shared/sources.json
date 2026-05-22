@@ -101,5 +101,14 @@
     "color": "blue",
     "interval": 1800000,
     "title": "综合早报"
+  },
+  "aihot": {
+    "name": "AIHOT",
+    "type": "hottest",
+    "column": "tech",
+    "home": "https://aihot.virxact.com",
+    "color": "purple",
+    "interval": 1800000,
+    "title": "AI 热点"
   }
 }
