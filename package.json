@@ -17,7 +17,7 @@
     "presource": "tsx ./scripts/favicon.ts && tsx ./scripts/source.ts",
     "start": "node --env-file .env.server dist/output/server/index.mjs",
     "preview": "cross-env CF_PAGES=1 npm run build && wrangler pages dev dist/output/public",
-    "deploy": "cross-env CF_PAGES=1 npm run build && wrangler pages deploy dist/output/public",
+    "deploy": "cross-env CF_PAGES=1 npm run build && wrangler pages deploy dist/output/public --commit-message deploy",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.app.json",
     "release": "bumpp",
     "prepare": "simple-git-hooks",
