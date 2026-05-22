@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { useEffect, useState } from "react"
+import { type ReactNode, useEffect, useState } from "react"
 import { useAtom } from "jotai"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -45,8 +45,33 @@ interface Msg {
   text: string
 }
 
+// 今日归档汇总（GET /api/archive），口播稿选题的原始素材
+interface ArchiveItem {
+  sourceId: string
+  newsId: string
+  title: string
+  url: string
+  firstSeen: number
+}
+interface ArchiveData {
+  count: number
+  items: ArchiveItem[]
+}
+
+// 两份约束文档（GET /api/prompts）
+interface PromptData {
+  select: string
+  write: string
+}
+
 function pad(n: number) {
   return String(n).padStart(2, "0")
+}
+
+// UTC ms → 北京时间 HH:MM
+function bjTime(ms: number): string {
+  const d = new Date(ms + 8 * 3600 * 1000)
+  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`
 }
 
 // sendAt(UTC ms，按北京时间解释) ↔ datetime-local 输入框的 "YYYY-MM-DDTHH:MM"
@@ -64,6 +89,195 @@ function localInputToSendAt(s: string): number | null {
   }
   const ms = Date.parse(`${s}:00+08:00`)
   return Number.isNaN(ms) ? null : ms
+}
+
+// 通用弹框外壳：遮罩 + 卡片 + 可滚动内容区
+function Modal({ title, icon, onClose, children }: {
+  title: string
+  icon?: string
+  onClose: () => void
+  children: ReactNode
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        className="bg-base rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-primary/15">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            {icon && <span className={icon} />}
+            {title}
+          </h3>
+          <button type="button" onClick={onClose} className="op-50 hover:op-100 text-lg" aria-label="关闭">
+            <span className="i-ph:x" />
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-4">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+// 拉取汇总弹框：展示今日已归档的新闻素材（口播稿选题来源）
+function ArchiveDialog({ onClose }: { onClose: () => void }) {
+  const [data, setData] = useState<ArchiveData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState("")
+
+  useEffect(() => {
+    let alive = true
+    async function load() {
+      try {
+        const d = await apiFetch<ArchiveData>("archive")
+        if (alive) {
+          setData(d)
+        }
+      } catch (e: any) {
+        if (alive) {
+          setErr(e?.data?.message || e?.message || "拉取失败，请重试")
+        }
+      } finally {
+        if (alive) {
+          setLoading(false)
+        }
+      }
+    }
+    void load()
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  let body: ReactNode = null
+  if (loading) {
+    body = (
+      <div className="text-sm op-60 flex items-center gap-2">
+        <span className="i-ph:circle-dashed animate-spin" />
+        拉取中…
+      </div>
+    )
+  } else if (err) {
+    body = (
+      <div className="p-2 text-sm text-red-500 bg-red-500/10 rounded flex items-center gap-1">
+        <span className="i-ph:warning-circle" />
+        {err}
+      </div>
+    )
+  } else if (data) {
+    body = (
+      <>
+        <div className="text-sm op-70 mb-3">
+          今日已归档
+          {" "}
+          <b className="color-primary">{data.count}</b>
+          {" 条（口播稿将从这些素材里选题）"}
+        </div>
+        {data.count === 0 ? (
+          <div className="text-sm op-50">今日暂无归档，等自动抓取任务跑过一次后再试。</div>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {data.items.map((it) => (
+              <li key={`${it.sourceId}-${it.newsId}`} className="text-sm flex items-center gap-2">
+                <span className="shrink-0 op-50 font-mono text-xs">{bjTime(it.firstSeen)}</span>
+                <span className="shrink-0 px-1.5 py-0.5 rounded bg-primary/10 text-xs">{it.sourceId}</span>
+                <a
+                  href={it.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="truncate hover:color-primary"
+                  title={it.title}
+                >
+                  {it.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </>
+    )
+  }
+
+  return (
+    <Modal title="今日新闻汇总" icon="i-ph:database" onClose={onClose}>
+      {body}
+    </Modal>
+  )
+}
+
+// 查看约束文档弹框：展示选题 + 写稿两份 prompt
+function PromptDialog({ onClose }: { onClose: () => void }) {
+  const [data, setData] = useState<PromptData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState("")
+
+  useEffect(() => {
+    let alive = true
+    async function load() {
+      try {
+        const d = await apiFetch<PromptData>("prompts")
+        if (alive) {
+          setData(d)
+        }
+      } catch (e: any) {
+        if (alive) {
+          setErr(e?.data?.message || e?.message || "读取失败，请重试")
+        }
+      } finally {
+        if (alive) {
+          setLoading(false)
+        }
+      }
+    }
+    void load()
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  let body: ReactNode = null
+  if (loading) {
+    body = (
+      <div className="text-sm op-60 flex items-center gap-2">
+        <span className="i-ph:circle-dashed animate-spin" />
+        读取中…
+      </div>
+    )
+  } else if (err) {
+    body = (
+      <div className="p-2 text-sm text-red-500 bg-red-500/10 rounded flex items-center gap-1">
+        <span className="i-ph:warning-circle" />
+        {err}
+      </div>
+    )
+  } else if (data) {
+    body = (
+      <div className="flex flex-col gap-4">
+        {(
+          [
+            { key: "select", label: "选题 prompt · douyin-select.md", text: data.select },
+            { key: "write", label: "写稿规范 · douyin.md", text: data.write },
+          ] as const
+        ).map((p) => (
+          <section key={p.key}>
+            <h4 className="text-sm font-bold op-80 mb-1 flex items-center gap-1">
+              <span className="i-ph:file-text" />
+              {p.label}
+            </h4>
+            <article className="prose prose-sm dark:prose-invert max-w-none border border-primary/15 rounded p-3">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{p.text}</ReactMarkdown>
+            </article>
+          </section>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <Modal title="口播稿约束文档（prompt）" icon="i-ph:scroll" onClose={onClose}>
+      {body}
+    </Modal>
+  )
 }
 
 // 结果弹框：渲染口播稿 + 复制 + 发送邮件
@@ -175,6 +389,9 @@ function AnalyzePage() {
 
   const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
+
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  const [promptOpen, setPromptOpen] = useState(false)
 
   // 加载服务器真实状态，并用「已生效的定时设置」校准草稿（apiKey / 邮箱不动）
   useEffect(() => {
@@ -446,10 +663,30 @@ function AnalyzePage() {
 
   return (
     <div className="max-w-3xl mx-auto p-4 flex flex-col gap-4">
-      <h2 className="text-xl font-bold flex items-center gap-2">
-        <span className="i-ph:robot" />
-        新闻抓取分析 · 口播稿
-      </h2>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h2 className="text-xl font-bold flex items-center gap-2">
+          <span className="i-ph:robot" />
+          新闻抓取分析 · 口播稿
+        </h2>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setArchiveOpen(true)}
+            className="text-sm flex items-center gap-1 px-3 py-1.5 rounded bg-primary/10 hover:bg-primary/20 transition-colors"
+          >
+            <span className="i-ph:database" />
+            拉取汇总
+          </button>
+          <button
+            type="button"
+            onClick={() => setPromptOpen(true)}
+            className="text-sm flex items-center gap-1 px-3 py-1.5 rounded bg-primary/10 hover:bg-primary/20 transition-colors"
+          >
+            <span className="i-ph:scroll" />
+            查看约束文档
+          </button>
+        </div>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2 items-start">
         {/* 左栏：内容生成 */}
@@ -701,6 +938,9 @@ function AnalyzePage() {
           sendMsg={sendMsg}
         />
       )}
+
+      {archiveOpen && <ArchiveDialog onClose={() => setArchiveOpen(false)} />}
+      {promptOpen && <PromptDialog onClose={() => setPromptOpen(false)} />}
     </div>
   )
 }
