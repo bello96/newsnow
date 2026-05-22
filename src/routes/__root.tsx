@@ -50,9 +50,9 @@ function RootComponent() {
         >
           <Outlet />
         </main>
-        {/* <footer className="py-6 flex flex-col items-center justify-center text-sm text-neutral-500 font-mono">
-          <Footer />
-        </footer> */}
+        <footer className="py-6 flex flex-col items-center justify-center text-sm text-neutral-500 font-mono">
+          {/* <Footer /> */}
+        </footer>
       </GlobalOverlayScrollbar>
       <Toast />
       {import.meta.env.DEV && (
