@@ -1,7 +1,10 @@
 import { atom } from "jotai"
-import { atomWithStorage } from "jotai/utils"
+import { atomWithStorage, createJSONStorage } from "jotai/utils"
 
 export type ProviderId = "deepseek" | "zhipu" | "kimi"
+export type ScheduleMode = "daily" | "once"
+
+export const MAX_RECIPIENTS = 5
 
 export interface ProviderConfig {
   apiKey: string
@@ -11,9 +14,11 @@ export interface ProviderConfig {
 
 export interface EmailConfig {
   enabled: boolean
-  toEmail: string
+  toEmails: string[]
+  scheduleMode: ScheduleMode
   sendHour: number
   sendMinute: number
+  sendAt: number | null
 }
 
 export interface LLMSettings {
@@ -64,9 +69,11 @@ function buildDefaultProviders(): Record<ProviderId, ProviderConfig> {
 
 const DEFAULT_EMAIL: EmailConfig = {
   enabled: false,
-  toEmail: "",
+  toEmails: [],
+  scheduleMode: "daily",
   sendHour: 7,
   sendMinute: 0,
+  sendAt: null,
 }
 
 const DEFAULT_SETTINGS: LLMSettings = {
@@ -86,5 +93,40 @@ export interface HistoryRow {
   emailError: string | null
 }
 
-export const llmSettingsAtom = atomWithStorage<LLMSettings>("newsnow-llm-settings", DEFAULT_SETTINGS)
+// 兼容旧版 localStorage：单个 toEmail → toEmails[]，并补齐新增字段
+function migrate(raw: any): LLMSettings {
+  if (!raw || typeof raw !== "object") {
+    return DEFAULT_SETTINGS
+  }
+  const email = (raw.email && typeof raw.email === "object") ? raw.email : {}
+  const toEmails = Array.isArray(email.toEmails)
+    ? email.toEmails.filter((e: any) => typeof e === "string")
+    : (typeof email.toEmail === "string" && email.toEmail ? [email.toEmail] : [])
+  return {
+    activeProvider: raw.activeProvider ?? "deepseek",
+    providers: { ...buildDefaultProviders(), ...(raw.providers ?? {}) },
+    email: {
+      enabled: !!email.enabled,
+      toEmails,
+      scheduleMode: email.scheduleMode === "once" ? "once" : "daily",
+      sendHour: typeof email.sendHour === "number" ? email.sendHour : 7,
+      sendMinute: email.sendMinute === 30 ? 30 : 0,
+      sendAt: typeof email.sendAt === "number" ? email.sendAt : null,
+    },
+  }
+}
+
+const baseStorage = createJSONStorage<LLMSettings>(() => localStorage)
+const migratingStorage = {
+  ...baseStorage,
+  getItem: (key: string, initialValue: LLMSettings): LLMSettings => {
+    return migrate(baseStorage.getItem(key, initialValue))
+  },
+}
+
+export const llmSettingsAtom = atomWithStorage<LLMSettings>(
+  "newsnow-llm-settings",
+  DEFAULT_SETTINGS,
+  migratingStorage,
+)
 export const historyAtom = atom<HistoryRow[]>([])

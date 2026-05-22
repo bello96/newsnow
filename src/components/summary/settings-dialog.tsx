@@ -1,8 +1,29 @@
 import { useAtom } from "jotai"
 import { useEffect, useState } from "react"
-import { PROVIDER_PRESETS, llmSettingsAtom } from "~/atoms/settings"
+import { MAX_RECIPIENTS, PROVIDER_PRESETS, llmSettingsAtom } from "~/atoms/settings"
 import type { EmailConfig, LLMSettings, ProviderId } from "~/atoms/settings"
 import { apiFetch } from "~/utils/api"
+
+function pad(n: number) {
+  return String(n).padStart(2, "0")
+}
+
+// sendAt(UTC ms，按北京时间解释) ↔ datetime-local 输入框的 "YYYY-MM-DDTHH:MM"
+function sendAtToLocalInput(ms: number | null): string {
+  if (!ms) {
+    return ""
+  }
+  const b = new Date(ms + 8 * 3600 * 1000)
+  return `${b.getUTCFullYear()}-${pad(b.getUTCMonth() + 1)}-${pad(b.getUTCDate())}T${pad(b.getUTCHours())}:${pad(b.getUTCMinutes())}`
+}
+
+function localInputToSendAt(s: string): number | null {
+  if (!s) {
+    return null
+  }
+  const ms = Date.parse(`${s}:00+08:00`)
+  return Number.isNaN(ms) ? null : ms
+}
 
 export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () => void }) {
   const [settings, setSettings] = useAtom(llmSettingsAtom)
@@ -41,13 +62,37 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
     setSaving(true)
     setError("")
     const next: LLMSettings = { ...draft, activeProvider: activeTab }
+    const cleanedEmails = next.email.toEmails.map(e => e.trim()).filter(Boolean)
+
+    if (next.email.enabled) {
+      if (cleanedEmails.length === 0) {
+        setError("开启定时发送需至少填写一个收件邮箱")
+        setSaving(false)
+        return
+      }
+      if (next.email.scheduleMode === "once") {
+        if (!next.email.sendAt) {
+          setError("请选择一次性发送的时间")
+          setSaving(false)
+          return
+        }
+        if (next.email.sendAt <= Date.now()) {
+          setError("一次性发送时间必须晚于当前时间")
+          setSaving(false)
+          return
+        }
+      }
+    }
+
     try {
       const activeCfg = next.providers[next.activeProvider]
       const body: Record<string, any> = {
         enabled: next.email.enabled ? 1 : 0,
-        toEmail: next.email.toEmail,
+        toEmails: cleanedEmails,
+        scheduleMode: next.email.scheduleMode,
         sendHour: next.email.sendHour,
         sendMinute: next.email.sendMinute,
+        sendAt: next.email.sendAt,
       }
       if (next.email.enabled) {
         body.llmApiKey = activeCfg.apiKey
@@ -60,7 +105,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
         method: "PUT",
         body,
       })
-      setSettings(next)
+      setSettings({ ...next, email: { ...next.email, toEmails: cleanedEmails } })
       onClose()
     } catch (e: any) {
       setError(e?.message || "保存失败，请重试")
@@ -180,6 +225,58 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
         </div>
 
         <div className="mt-5 pt-3 border-t border-primary/15">
+          <label className={labelCls}>
+            收件邮箱（最多
+            {" "}
+            {MAX_RECIPIENTS}
+            {" "}
+            个 · 手动 / 定时发送共用）
+          </label>
+          <div className="flex flex-col gap-2">
+            {email.toEmails.map((addr, i) => {
+              // 简单的可增删字符串列表，按 index 操作即可
+              return (
+                // eslint-disable-next-line react/no-array-index-key
+                <div key={i} className="flex gap-2 items-center">
+                  <input
+                    type="email"
+                    className={inputCls}
+                    value={addr}
+                    onChange={(e) => {
+                      const next = [...email.toEmails]
+                      next[i] = e.target.value
+                      setEmail("toEmails", next)
+                    }}
+                    placeholder="your@email.com"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEmail("toEmails", email.toEmails.filter((_, j) => j !== i))}
+                    className="shrink-0 w-8 h-8 flex items-center justify-center rounded op-50 hover:op-100 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                    aria-label="删除该邮箱"
+                  >
+                    <span className="i-ph:trash" />
+                  </button>
+                </div>
+              )
+            })}
+            {email.toEmails.length < MAX_RECIPIENTS && (
+              <button
+                type="button"
+                onClick={() => setEmail("toEmails", [...email.toEmails, ""])}
+                className="self-start flex items-center gap-1 text-xs px-2 py-1 rounded bg-primary/10 hover:bg-primary/20 transition-colors"
+              >
+                <span className="i-ph:plus" />
+                添加邮箱
+              </button>
+            )}
+            {email.toEmails.length === 0 && (
+              <span className="text-xs op-50">点「添加邮箱」填写收件人，再到「生成今日总结」后即可手动发送</span>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 pt-3 border-t border-primary/15">
           <label className={$([
             "flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-colors mb-3",
             email.enabled ? "bg-primary/15" : "bg-primary/5 hover:bg-primary/10",
@@ -191,8 +288,8 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
               onChange={e => setEmail("enabled", e.target.checked)}
             />
             <span className="text-sm font-medium flex items-center gap-1">
-              <span className="i-ph:envelope-simple" />
-              开启定时邮件发送
+              <span className="i-ph:clock" />
+              开启定时发送
             </span>
             <span className="ml-auto text-xs">
               {email.enabled
@@ -203,37 +300,68 @@ export function SettingsDialog({ open, onClose }: { open: boolean, onClose: () =
 
           {email.enabled && (
             <>
-              <div className="mb-3">
-                <label className={labelCls}>收件邮箱</label>
-                <input
-                  type="email"
-                  className={inputCls}
-                  value={email.toEmail}
-                  onChange={e => setEmail("toEmail", e.target.value)}
-                  placeholder="your@email.com"
-                />
+              <div className="flex gap-2 mb-3">
+                {([
+                  { id: "daily", label: "每天循环", icon: "i-ph:repeat" },
+                  { id: "once", label: "一次性", icon: "i-ph:calendar-check" },
+                ] as const).map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setEmail("scheduleMode", m.id)}
+                    className={$([
+                      "flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md text-sm transition-all border",
+                      email.scheduleMode === m.id
+                        ? "bg-primary/15 border-primary/40 color-primary font-bold"
+                        : "border-transparent bg-primary/5 op-70 hover:op-100",
+                    ])}
+                  >
+                    <span className={m.icon} />
+                    {m.label}
+                  </button>
+                ))}
               </div>
-              <div className="mb-3">
-                <label className={labelCls}>发送时间（北京时间，每 30 分钟）</label>
-                <select
-                  className={inputCls}
-                  value={`${String(email.sendHour).padStart(2, "0")}:${String(email.sendMinute).padStart(2, "0")}`}
-                  onChange={(e) => {
-                    const [h, m] = e.target.value.split(":").map(Number)
-                    setDraft({ ...draft, email: { ...email, sendHour: h, sendMinute: m } })
-                  }}
-                >
-                  {Array.from({ length: 48 }, (_, i) => {
-                    const h = Math.floor(i / 2)
-                    const m = i % 2 === 0 ? 0 : 30
-                    const label = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
-                    return <option key={label} value={label}>{label}</option>
-                  })}
-                </select>
-              </div>
+
+              {email.scheduleMode === "daily"
+                ? (
+                    <div className="mb-3">
+                      <label className={labelCls}>每天发送时间（北京时间，每 30 分钟）</label>
+                      <select
+                        className={inputCls}
+                        value={`${pad(email.sendHour)}:${pad(email.sendMinute)}`}
+                        onChange={(e) => {
+                          const [h, m] = e.target.value.split(":").map(Number)
+                          setDraft({ ...draft, email: { ...email, sendHour: h, sendMinute: m } })
+                        }}
+                      >
+                        {Array.from({ length: 48 }, (_, i) => {
+                          const h = Math.floor(i / 2)
+                          const m = i % 2 === 0 ? 0 : 30
+                          const label = `${pad(h)}:${pad(m)}`
+                          return <option key={label} value={label}>{label}</option>
+                        })}
+                      </select>
+                    </div>
+                  )
+                : (
+                    <div className="mb-3">
+                      <label className={labelCls}>发送时间（北京时间，发完自动关闭）</label>
+                      <input
+                        type="datetime-local"
+                        className={inputCls}
+                        value={sendAtToLocalInput(email.sendAt)}
+                        min={sendAtToLocalInput(Date.now())}
+                        onChange={e => setEmail("sendAt", localInputToSendAt(e.target.value))}
+                      />
+                    </div>
+                  )}
+
               <div className="text-xs op-50">
-                到点后服务器自动用「当前 Provider 配置」生成口播稿并发到该邮箱。
-                实际触发可能延迟 5-10 分钟（GitHub Actions 调度）。
+                {email.scheduleMode === "daily"
+                  ? "服务器每天到点用当前 Provider 配置生成口播稿，发到上面所有收件邮箱。"
+                  : "到指定时间点后发送一次，发完自动关闭定时。"}
+                {" "}
+                实际触发由 GitHub Actions 调度，可能延迟最多 30 分钟。
               </div>
             </>
           )}

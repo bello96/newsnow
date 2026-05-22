@@ -57,14 +57,28 @@ export default defineEventHandler(async (event) => {
     if (!settings.toEmail) {
       return { skip: "no_to_email" }
     }
-    const targetMin = settings.sendHour * 60 + settings.sendMinute
-    const currMin = beijingHour * 60 + beijingMinute
-    const delta = currMin - targetMin
-    if (delta < 0 || delta >= 30) {
-      return { skip: "not_in_window", currMin, targetMin }
-    }
-    if (settings.lastSentDate === today) {
-      return { skip: "already_sent", today }
+    if (settings.scheduleMode === "once") {
+      if (!settings.sendAt) {
+        return { skip: "no_send_at" }
+      }
+      if (now < settings.sendAt) {
+        return { skip: "not_yet", now, sendAt: settings.sendAt }
+      }
+      // 目标时间已过 2 小时仍未发，视为过期任务，自动关闭定时
+      if (now - settings.sendAt > 2 * 3600 * 1000) {
+        await settingsTable.put({ enabled: 0, sendAt: null })
+        return { skip: "expired", now, sendAt: settings.sendAt }
+      }
+    } else {
+      const targetMin = settings.sendHour * 60 + settings.sendMinute
+      const currMin = beijingHour * 60 + beijingMinute
+      const delta = currMin - targetMin
+      if (delta < 0 || delta >= 30) {
+        return { skip: "not_in_window", currMin, targetMin }
+      }
+      if (settings.lastSentDate === today) {
+        return { skip: "already_sent", today }
+      }
     }
   }
 
@@ -119,8 +133,9 @@ export default defineEventHandler(async (event) => {
   let emailError: string | null = null
   if (!dryRun) {
     try {
-      const subject = `今日口播稿 - ${today}`
-      await sendEmail({ to: settings.toEmail, subject, text })
+      const subject = `新闻速递 ${today}`
+      const emailText = `${text}\n\n———————————\n本邮件由「信息速递员」根据您的订阅设置自动生成发送。\n如需停止接收，请前往 https://new.dengjiabei.cn/summary 关闭定时发送。`
+      await sendEmail({ to: settings.toEmail, subject, text: emailText })
       emailStatus = "sent"
     } catch (e: any) {
       emailStatus = "failed"
@@ -139,7 +154,12 @@ export default defineEventHandler(async (event) => {
   })
 
   if (!dryRun && emailStatus === "sent") {
-    await settingsTable.markSent(today)
+    if (settings.scheduleMode === "once") {
+      // 一次性发送完成：关闭定时并清空目标时间，避免重复发送
+      await settingsTable.put({ enabled: 0, sendAt: null })
+    } else {
+      await settingsTable.markSent(today)
+    }
   }
 
   return {

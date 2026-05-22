@@ -22,6 +22,17 @@ function SummaryPage() {
   const settings = useAtomValue(llmSettingsAtom)
   const [result, setResult] = useAtom(summaryResultAtom)
   const setHistory = useSetAtom(historyAtom)
+  const [sending, setSending] = useState(false)
+  const [sendMsg, setSendMsg] = useState<{ ok: boolean, text: string } | null>(null)
+
+  const refreshHistory = async () => {
+    try {
+      const h = await apiFetch<{ count: number, items: HistoryRow[] }>("history?limit=7")
+      setHistory(h.items)
+    } catch {
+      // 历史刷新失败不影响主流程
+    }
+  }
 
   const onAnalyze = async () => {
     const cfg = settings.providers[settings.activeProvider]
@@ -29,6 +40,7 @@ function SummaryPage() {
       setSettingsOpen(true)
       return
     }
+    setSendMsg(null)
     setResult({ loading: true, text: "" })
     try {
       const data = await llmFetch<AnalyzeResponse>("analyze", cfg.apiKey, {
@@ -39,14 +51,35 @@ function SummaryPage() {
         },
       })
       setResult({ loading: false, text: data.text })
-      try {
-        const h = await apiFetch<{ count: number, items: HistoryRow[] }>("history?limit=7")
-        setHistory(h.items)
-      } catch {
-        // 历史刷新失败不影响主流程
-      }
+      await refreshHistory()
     } catch (e: any) {
       setResult({ loading: false, text: "", error: e?.message ?? String(e) })
+    }
+  }
+
+  const onSend = async () => {
+    if (!result.text) {
+      return
+    }
+    const emails = settings.email.toEmails.map(e => e.trim()).filter(Boolean)
+    if (emails.length === 0) {
+      setSendMsg({ ok: false, text: "请先在配置里添加收件邮箱" })
+      setSettingsOpen(true)
+      return
+    }
+    setSending(true)
+    setSendMsg(null)
+    try {
+      await apiFetch("send", {
+        method: "POST",
+        body: { text: result.text, toEmails: emails },
+      })
+      setSendMsg({ ok: true, text: `已发送到 ${emails.length} 个邮箱` })
+      await refreshHistory()
+    } catch (e: any) {
+      setSendMsg({ ok: false, text: e?.data?.message || e?.message || "发送失败，请重试" })
+    } finally {
+      setSending(false)
     }
   }
 
@@ -74,9 +107,28 @@ function SummaryPage() {
         </div>
       </div>
       <div className="text-xs op-60">
-        点「生成今日总结」让大模型从今日累积的新闻里挑出爆点生成口播稿。API Key 仅保存在浏览器本地。
+        点「生成今日总结」让大模型从今日累积的新闻里挑出爆点生成口播稿，确认无误后再「发送到邮箱」。API Key 仅保存在浏览器本地。
       </div>
       <ResultView />
+      {!result.loading && result.text && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            type="button"
+            onClick={onSend}
+            disabled={sending}
+            className="px-4 py-1.5 rounded bg-primary/20 hover:bg-primary/30 text-sm font-bold disabled:op-50 disabled:cursor-not-allowed flex items-center gap-1"
+          >
+            <span className="i-ph:paper-plane-tilt" />
+            {sending ? "发送中..." : "发送到邮箱"}
+          </button>
+          {sendMsg && (
+            <span className={`text-sm flex items-center gap-1 ${sendMsg.ok ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
+              <span className={sendMsg.ok ? "i-ph:check-circle" : "i-ph:warning-circle"} />
+              {sendMsg.text}
+            </span>
+          )}
+        </div>
+      )}
       <div className="mt-2">
         <HistoryList />
       </div>

@@ -9,6 +9,8 @@ export interface UserSettings {
   toEmail: string
   sendHour: number
   sendMinute: number
+  scheduleMode: "daily" | "once"
+  sendAt: number | null
   enabled: number
   lastSentDate: string | null
   updatedAt: number
@@ -21,6 +23,8 @@ const DEFAULTS: Omit<UserSettings, "id" | "lastSentDate" | "updatedAt"> = {
   toEmail: "",
   sendHour: 7,
   sendMinute: 0,
+  scheduleMode: "daily",
+  sendAt: null,
   enabled: 0,
 }
 
@@ -33,6 +37,8 @@ function toCamel(row: any): UserSettings {
     toEmail: row.to_email ?? "",
     sendHour: row.send_hour ?? 0,
     sendMinute: row.send_minute ?? 0,
+    scheduleMode: row.schedule_mode === "once" ? "once" : "daily",
+    sendAt: row.send_at ?? null,
     enabled: row.enabled ?? 0,
     lastSentDate: row.last_sent_date ?? null,
     updatedAt: row.updated_at ?? 0,
@@ -46,6 +52,8 @@ const SNAKE_MAP: Record<keyof Omit<UserSettings, "id">, string> = {
   toEmail: "to_email",
   sendHour: "send_hour",
   sendMinute: "send_minute",
+  scheduleMode: "schedule_mode",
+  sendAt: "send_at",
   enabled: "enabled",
   lastSentDate: "last_sent_date",
   updatedAt: "updated_at",
@@ -64,11 +72,24 @@ export class Settings {
         to_email TEXT NOT NULL DEFAULT '',
         send_hour INTEGER NOT NULL DEFAULT 7,
         send_minute INTEGER NOT NULL DEFAULT 0,
+        schedule_mode TEXT NOT NULL DEFAULT 'daily',
+        send_at INTEGER,
         enabled INTEGER NOT NULL DEFAULT 0,
         last_sent_date TEXT,
         updated_at INTEGER NOT NULL DEFAULT 0
       );
     `).run()
+    // 兼容旧表：缺列则补（列已存在会抛错，忽略即可）
+    for (const ddl of [
+      `ALTER TABLE user_settings ADD COLUMN schedule_mode TEXT NOT NULL DEFAULT 'daily'`,
+      `ALTER TABLE user_settings ADD COLUMN send_at INTEGER`,
+    ]) {
+      try {
+        await this.db.prepare(ddl).run()
+      } catch {
+        // 列已存在，忽略
+      }
+    }
     await this.db.prepare(`
       INSERT OR IGNORE INTO user_settings (id, updated_at) VALUES (1, ?)
     `).run(Date.now())
