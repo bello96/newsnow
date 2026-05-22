@@ -2,17 +2,7 @@ import { getHistoryTable } from "#/database/history"
 import { getSettingsTable } from "#/database/settings"
 import { sendEmail } from "#/utils/email"
 import { generateScript } from "#/utils/generate-script"
-
-const BEIJING_OFFSET_MS = 8 * 3600 * 1000
-
-function getBeijingNow(nowMs: number) {
-  const beijing = new Date(nowMs + BEIJING_OFFSET_MS)
-  return {
-    ymd: beijing.toISOString().slice(0, 10),
-    hour: beijing.getUTCHours(),
-    minute: beijing.getUTCMinutes(),
-  }
-}
+import { getBeijingNow } from "#/utils/time"
 
 export default defineEventHandler(async (event) => {
   const dryRun = getQuery(event).dryRun === "true"

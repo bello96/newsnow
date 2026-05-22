@@ -1,10 +1,7 @@
 import { getHistoryTable } from "#/database/history"
-import { sendEmail } from "#/utils/email"
+import { normalizeRecipients, sendEmail } from "#/utils/email"
 import { splitTitle } from "#/utils/generate-script"
-
-const BEIJING_OFFSET_MS = 8 * 3600 * 1000
-const EMAIL_RE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/
-const MAX_RECIPIENTS = 5
+import { getBeijingNow } from "#/utils/time"
 
 interface SendBody {
   text?: string
@@ -19,18 +16,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: "发送内容为空，请先生成口播稿" })
   }
 
-  const emails = Array.isArray(body.toEmails)
-    ? body.toEmails
-        .map(e => String(e).trim())
-        .filter(e => EMAIL_RE.test(e))
-        .slice(0, MAX_RECIPIENTS)
-    : []
+  const emails = normalizeRecipients(body.toEmails)
   if (emails.length === 0) {
     throw createError({ statusCode: 400, message: "请先在配置中填写有效的收件邮箱" })
   }
 
   const now = Date.now()
-  const today = new Date(now + BEIJING_OFFSET_MS).toISOString().slice(0, 10)
+  const today = getBeijingNow(now).ymd
   const { title, body: scriptBody } = splitTitle(rawText)
   const subject = title || `新闻速递 ${today}`
   const emailText = `${scriptBody}\n\n———————————\n本邮件由「信息速递员」手动发送。`

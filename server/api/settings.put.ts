@@ -1,5 +1,6 @@
 import type { UserSettings } from "#/database/settings"
 import { getSettingsTable } from "#/database/settings"
+import { normalizeRecipients } from "#/utils/email"
 
 interface SettingsPayload {
   llmApiKey?: string
@@ -12,9 +13,6 @@ interface SettingsPayload {
   sendAt?: number | null
   enabled?: number
 }
-
-const EMAIL_RE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/
-const MAX_RECIPIENTS = 5
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<SettingsPayload>(event).catch<SettingsPayload>(() => ({}))
@@ -34,11 +32,7 @@ export default defineEventHandler(async (event) => {
     partial.llmModel = body.llmModel
   }
   if (Array.isArray(body.toEmails)) {
-    const cleaned = body.toEmails
-      .map(e => String(e).trim())
-      .filter(e => EMAIL_RE.test(e))
-      .slice(0, MAX_RECIPIENTS)
-    partial.toEmail = cleaned.join(",")
+    partial.toEmail = normalizeRecipients(body.toEmails).join(",")
   }
   if (typeof body.sendHour === "number" && body.sendHour >= 0 && body.sendHour <= 23) {
     partial.sendHour = body.sendHour

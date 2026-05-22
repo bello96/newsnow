@@ -2,6 +2,26 @@ import process from "node:process"
 import { ofetch } from "ofetch"
 import { buildSignedBody } from "./aliyun-dm"
 
+export const MAX_RECIPIENTS = 5
+
+// 收件邮箱白名单正则（域名分段不含点，避免超线性回溯 ReDoS）
+const EMAIL_RE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/
+
+// 清洗收件人数组：去空白 → 过滤非法邮箱 → 去重 → 限制上限
+export function normalizeRecipients(input: unknown): string[] {
+  if (!Array.isArray(input)) {
+    return []
+  }
+  const seen = new Set<string>()
+  for (const raw of input) {
+    const email = String(raw).trim()
+    if (EMAIL_RE.test(email)) {
+      seen.add(email)
+    }
+  }
+  return [...seen].slice(0, MAX_RECIPIENTS)
+}
+
 export interface SendEmailParams {
   to: string
   subject: string

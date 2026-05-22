@@ -3,20 +3,7 @@ import { getArchiveTable } from "#/database/archive"
 import { getDouyinSelectPrompt, getDouyinWritePrompt } from "#/prompts/douyin"
 import { fetchArticles } from "#/utils/fetch-article"
 import { joinChatCompletionsUrl } from "#/utils/llm-url"
-
-const BEIJING_OFFSET_MS = 8 * 3600 * 1000
-
-export function getBeijingMidnightUtcMs(nowMs: number) {
-  const beijing = new Date(nowMs + BEIJING_OFFSET_MS)
-  return Date.UTC(
-    beijing.getUTCFullYear(),
-    beijing.getUTCMonth(),
-    beijing.getUTCDate(),
-    0,
-    0,
-    0,
-  ) - BEIJING_OFFSET_MS
-}
+import { getBeijingMidnightUtcMs } from "#/utils/time"
 
 export interface LLMConfig {
   apiKey: string
