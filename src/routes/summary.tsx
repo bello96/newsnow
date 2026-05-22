@@ -1,141 +1,405 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { useState } from "react"
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { SettingsDialog } from "~/components/summary/settings-dialog"
-import { HistoryList } from "~/components/summary/history-list"
-import { ResultView } from "~/components/summary/result-view"
-import { summaryResultAtom } from "~/atoms/summary"
-import { DEEPSEEK_BASE_URL, historyAtom, llmSettingsAtom } from "~/atoms/settings"
-import type { HistoryRow } from "~/atoms/settings"
+import { useAtom } from "jotai"
+import { DEEPSEEK_BASE_URL, DEEPSEEK_MODELS, MAX_RECIPIENTS, llmSettingsAtom } from "~/atoms/settings"
+import type { EmailConfig, LLMConfig } from "~/atoms/settings"
 import { apiFetch, llmFetch } from "~/utils/api"
 
-interface AnalyzeResponse {
-  text: string
-  newsCount: number
-  model: string
-}
+// 收件邮箱白名单正则（域名分段不含点，避免超线性回溯）
+const EMAIL_RE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/
+// 每天发送时间 HH:MM（24 小时制）
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/
 
 export const Route = createFileRoute("/summary")({ component: SummaryPage })
 
+function pad(n: number) {
+  return String(n).padStart(2, "0")
+}
+
+// sendAt(UTC ms，按北京时间解释) ↔ datetime-local 输入框的 "YYYY-MM-DDTHH:MM"
+function sendAtToLocalInput(ms: number | null): string {
+  if (!ms) {
+    return ""
+  }
+  const b = new Date(ms + 8 * 3600 * 1000)
+  return `${b.getUTCFullYear()}-${pad(b.getUTCMonth() + 1)}-${pad(b.getUTCDate())}T${pad(b.getUTCHours())}:${pad(b.getUTCMinutes())}`
+}
+
+function localInputToSendAt(s: string): number | null {
+  if (!s) {
+    return null
+  }
+  const ms = Date.parse(`${s}:00+08:00`)
+  return Number.isNaN(ms) ? null : ms
+}
+
 function SummaryPage() {
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const settings = useAtomValue(llmSettingsAtom)
-  const [result, setResult] = useAtom(summaryResultAtom)
-  const setHistory = useSetAtom(historyAtom)
-  const [sending, setSending] = useState(false)
-  const [sendMsg, setSendMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [settings, setSettings] = useAtom(llmSettingsAtom)
+  const [dailyTime, setDailyTime] = useState(`${pad(settings.email.sendHour)}:${pad(settings.email.sendMinute)}`)
+  const [busy, setBusy] = useState(false)
+  const [phase, setPhase] = useState("")
+  const [error, setError] = useState("")
+  const [okMsg, setOkMsg] = useState("")
 
-  const refreshHistory = async () => {
-    try {
-      const h = await apiFetch<{ count: number; items: HistoryRow[] }>("history?limit=7")
-      setHistory(h.items)
-    } catch {
-      // 历史刷新失败不影响主流程
-    }
+  const cfg = settings.llm
+  const email = settings.email
+  // 「发送」按钮可点条件：已填 API Key + 至少一个收件邮箱
+  const canSend = cfg.apiKey.trim() !== "" && email.toEmails.some(e => e.trim() !== "")
+
+  function setCfg<K extends keyof LLMConfig>(key: K, value: LLMConfig[K]) {
+    setError("")
+    setOkMsg("")
+    setSettings({ ...settings, llm: { ...settings.llm, [key]: value } })
   }
 
-  const onAnalyze = async () => {
-    const cfg = settings.llm
-    if (!cfg.apiKey) {
-      setSettingsOpen(true)
+  function setEmail<K extends keyof EmailConfig>(key: K, value: EmailConfig[K]) {
+    setError("")
+    setOkMsg("")
+    setSettings({ ...settings, email: { ...settings.email, [key]: value } })
+  }
+
+  // 校验收件邮箱：返回清洗后的列表，非法时抛出错误信息
+  function validateEmails(): string[] {
+    const cleaned = email.toEmails.map(e => e.trim()).filter(Boolean)
+    if (cleaned.length === 0) {
+      throw new Error("请至少填写一个收件邮箱")
+    }
+    const bad = cleaned.find(e => !EMAIL_RE.test(e))
+    if (bad) {
+      throw new Error(`收件邮箱格式无效：${bad}`)
+    }
+    return cleaned
+  }
+
+  // 未开启定时：分析后立即发送，并作废历史定时任务
+  async function onImmediateSend() {
+    setError("")
+    setOkMsg("")
+    const apiKey = cfg.apiKey.trim()
+    if (!apiKey) {
+      setError("请先填写 DeepSeek API Key")
       return
     }
-    setSendMsg(null)
-    setResult({ loading: true, text: "" })
+    let cleanedEmails: string[]
     try {
-      const data = await llmFetch<AnalyzeResponse>("analyze", cfg.apiKey, {
-        method: "POST",
-        body: {
-          baseUrl: DEEPSEEK_BASE_URL,
-          model: cfg.model,
-        },
-      })
-      setResult({ loading: false, text: data.text })
-      await refreshHistory()
+      cleanedEmails = validateEmails()
     } catch (e: any) {
-      setResult({ loading: false, text: "", error: e?.message ?? String(e) })
+      setError(e.message)
+      return
     }
-  }
 
-  const onSend = async () => {
-    if (!result.text) {
-      return
-    }
-    const emails = settings.email.toEmails.map((e) => e.trim()).filter(Boolean)
-    if (emails.length === 0) {
-      setSendMsg({ ok: false, text: "请先在配置里添加收件邮箱" })
-      setSettingsOpen(true)
-      return
-    }
-    setSending(true)
-    setSendMsg(null)
+    setBusy(true)
     try {
+      // 作废历史定时任务（单行表，enabled=0 即停）并持久化邮箱
+      await apiFetch("settings", {
+        method: "PUT",
+        body: { enabled: 0, toEmails: cleanedEmails, llmApiKey: "" },
+      })
+      setPhase("分析中…")
+      const data = await llmFetch<{ text: string }>("analyze", apiKey, {
+        method: "POST",
+        body: { baseUrl: DEEPSEEK_BASE_URL, model: cfg.model },
+      })
+      setPhase("发送中…")
       await apiFetch("send", {
         method: "POST",
-        body: { text: result.text, toEmails: emails },
+        body: { text: data.text, toEmails: cleanedEmails },
       })
-      setSendMsg({ ok: true, text: `已发送到 ${emails.length} 个邮箱` })
-      await refreshHistory()
+      setSettings({ ...settings, email: { ...email, enabled: false, toEmails: cleanedEmails } })
+      setOkMsg(`已分析并发送到 ${cleanedEmails.length} 个邮箱`)
     } catch (e: any) {
-      setSendMsg({ ok: false, text: e?.data?.message || e?.message || "发送失败，请重试" })
+      setError(e?.data?.message || e?.message || "发送失败，请重试")
     } finally {
-      setSending(false)
+      setBusy(false)
+      setPhase("")
     }
   }
 
+  // 开启定时：校验时间后保存为唯一定时任务，覆盖历史任务
+  async function onScheduledSend() {
+    setError("")
+    setOkMsg("")
+    const apiKey = cfg.apiKey.trim()
+    if (!apiKey) {
+      setError("请先填写 DeepSeek API Key")
+      return
+    }
+    let cleanedEmails: string[]
+    try {
+      cleanedEmails = validateEmails()
+    } catch (e: any) {
+      setError(e.message)
+      return
+    }
+
+    let sendHour = email.sendHour
+    let sendMinute = email.sendMinute
+    if (email.scheduleMode === "daily") {
+      const m = TIME_RE.exec(dailyTime.trim())
+      if (!m) {
+        setError("每天发送时间格式不正确，请输入 00:00 ~ 23:59")
+        return
+      }
+      sendHour = Number(m[1])
+      sendMinute = Number(m[2])
+    } else {
+      if (!email.sendAt) {
+        setError("请选择一次性发送的时间")
+        return
+      }
+      if (email.sendAt <= Date.now()) {
+        setError("一次性发送时间必须晚于当前时间")
+        return
+      }
+    }
+
+    setBusy(true)
+    try {
+      await apiFetch<{ ok: boolean }>("settings", {
+        method: "PUT",
+        body: {
+          enabled: 1,
+          toEmails: cleanedEmails,
+          scheduleMode: email.scheduleMode,
+          sendHour,
+          sendMinute,
+          sendAt: email.scheduleMode === "once" ? email.sendAt : null,
+          llmApiKey: apiKey,
+          llmBaseUrl: DEEPSEEK_BASE_URL,
+          llmModel: cfg.model,
+        },
+      })
+      setSettings({ ...settings, email: { ...email, enabled: true, toEmails: cleanedEmails, sendHour, sendMinute } })
+      setOkMsg(email.scheduleMode === "daily"
+        ? `已开启定时发送：每天 ${pad(sendHour)}:${pad(sendMinute)}`
+        : "已开启定时发送：到点发送一次")
+    } catch (e: any) {
+      setError(e?.message || "保存失败，请重试")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const inputCls = "w-full p-2 border border-primary/20 rounded bg-zinc-200/60 dark:bg-zinc-700/40 text-sm focus:outline-none focus:border-primary transition-colors"
+  const labelCls = "block text-xs op-70 mb-1"
+
   return (
-    <div className="max-w-3xl mx-auto p-4 flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">信息速递员 · 口播稿</h2>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="px-3 py-1 rounded hover:bg-primary/10 text-sm flex items-center gap-1"
-          >
-            <span className="i-ph:gear" />
-            配置
-          </button>
-          <button
-            type="button"
-            onClick={onAnalyze}
-            disabled={result.loading}
-            className="px-4 py-1 rounded bg-primary/20 hover:bg-primary/30 text-sm font-bold disabled:op-50 disabled:cursor-not-allowed disabled:hover:bg-primary/20"
-          >
-            {result.loading ? "生成中..." : "立即分析"}
-          </button>
-        </div>
+    <div className="max-w-xl mx-auto p-4 flex flex-col gap-3">
+      <h2 className="text-xl font-bold flex items-center gap-2">
+        <span className="i-ph:robot" />
+        信息速递员 · 口播稿
+      </h2>
+      <div className="text-xs op-60 p-3 bg-primary/5 rounded">
+        使用 DeepSeek 模型。API Key 仅保存在浏览器本地；开启定时发送后，将上传到服务器以便定时调用。
       </div>
-      <div className="text-xs op-60">
-        点「立即分析」让大模型从今日累积的新闻里挑出爆点生成口播稿，确认无误后再「发送到邮箱」。API Key
-        仅保存在浏览器本地。
+
+      <div>
+        <label className={labelCls}>DeepSeek API Key</label>
+        <input
+          type="password"
+          className={inputCls}
+          value={cfg.apiKey}
+          onChange={e => setCfg("apiKey", e.target.value)}
+          placeholder="sk-..."
+        />
       </div>
-      <ResultView />
-      {!result.loading && result.text && (
-        <div className="flex items-center gap-3 flex-wrap">
-          <button
-            type="button"
-            onClick={onSend}
-            disabled={sending}
-            className="px-4 py-1.5 rounded bg-primary/20 hover:bg-primary/30 text-sm font-bold disabled:op-50 disabled:cursor-not-allowed flex items-center gap-1"
-          >
-            <span className="i-ph:paper-plane-tilt" />
-            {sending ? "发送中..." : "发送到邮箱"}
-          </button>
-          {sendMsg && (
-            <span
-              className={`text-sm flex items-center gap-1 ${sendMsg.ok ? "text-green-600 dark:text-green-400" : "text-red-500"}`}
+
+      <div>
+        <label className={labelCls}>Model</label>
+        <select
+          className={inputCls}
+          value={cfg.model}
+          onChange={e => setCfg("model", e.target.value)}
+        >
+          {DEEPSEEK_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+          {!DEEPSEEK_MODELS.includes(cfg.model) && (
+            <option value={cfg.model}>
+              {cfg.model}
+              {" (custom)"}
+            </option>
+          )}
+        </select>
+      </div>
+
+      <div>
+        <label className={labelCls}>
+          收件邮箱（最多
+          {" "}
+          {MAX_RECIPIENTS}
+          {" "}
+          个 · 手动 / 定时发送共用）
+        </label>
+        <div className="flex flex-col gap-2">
+          {email.toEmails.map((addr, i) => {
+            // 简单的可增删字符串列表，按 index 操作即可
+            return (
+              // eslint-disable-next-line react/no-array-index-key
+              <div key={i} className="flex gap-2 items-center">
+                <input
+                  type="email"
+                  className={inputCls}
+                  value={addr}
+                  onChange={(e) => {
+                    const next = [...email.toEmails]
+                    next[i] = e.target.value
+                    setEmail("toEmails", next)
+                  }}
+                  placeholder="your@email.com"
+                />
+                <button
+                  type="button"
+                  onClick={() => setEmail("toEmails", email.toEmails.filter((_, j) => j !== i))}
+                  className="shrink-0 w-8 h-8 flex items-center justify-center rounded op-50 hover:op-100 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                  aria-label="删除该邮箱"
+                >
+                  <span className="i-ph:trash" />
+                </button>
+              </div>
+            )
+          })}
+          {email.toEmails.length < MAX_RECIPIENTS && (
+            <button
+              type="button"
+              onClick={() => setEmail("toEmails", [...email.toEmails, ""])}
+              className="self-start flex items-center gap-1 text-xs px-2 py-1 rounded bg-primary/10 hover:bg-primary/20 transition-colors"
             >
-              <span className={sendMsg.ok ? "i-ph:check-circle" : "i-ph:warning-circle"} />
-              {sendMsg.text}
-            </span>
+              <span className="i-ph:plus" />
+              添加邮箱
+            </button>
+          )}
+          {email.toEmails.length === 0 && (
+            <span className="text-xs op-50">填好收件邮箱与 API Key 后，点下方「发送」即可立即分析并发送</span>
           )}
         </div>
-      )}
-      <div className="mt-2">
-        <HistoryList />
       </div>
-      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+      <div className="pt-2 border-t border-primary/15">
+        <label className={$([
+          "flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-colors mb-3",
+          email.enabled ? "bg-primary/15" : "bg-primary/5 hover:bg-primary/10",
+        ])}
+        >
+          <input
+            type="checkbox"
+            checked={email.enabled}
+            onChange={e => setEmail("enabled", e.target.checked)}
+          />
+          <span className="text-sm font-medium flex items-center gap-1">
+            <span className="i-ph:clock" />
+            开启定时发送
+          </span>
+          <span className="ml-auto text-xs">
+            {email.enabled
+              ? <span className="color-primary">● 已开启</span>
+              : <span className="op-50">○ 关闭</span>}
+          </span>
+        </label>
+
+        {email.enabled && (
+          <>
+            <div className="flex gap-2 mb-3">
+              {([
+                { id: "daily", label: "每天", icon: "i-ph:repeat" },
+                { id: "once", label: "一次", icon: "i-ph:calendar-check" },
+              ] as const).map(m => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setEmail("scheduleMode", m.id)}
+                  className={$([
+                    "flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md text-sm transition-all border",
+                    email.scheduleMode === m.id
+                      ? "bg-primary/15 border-primary/40 color-primary font-bold"
+                      : "border-transparent bg-primary/5 op-70 hover:op-100",
+                  ])}
+                >
+                  <span className={m.icon} />
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            {email.scheduleMode === "daily"
+              ? (
+                  <div className="mb-3">
+                    <label className={labelCls}>每天发送时间（24 小时制，如 09:00）</label>
+                    <input
+                      type="text"
+                      className={inputCls}
+                      value={dailyTime}
+                      onChange={(e) => {
+                        setError("")
+                        setOkMsg("")
+                        setDailyTime(e.target.value)
+                      }}
+                      placeholder="09:00"
+                      maxLength={5}
+                      inputMode="numeric"
+                    />
+                  </div>
+                )
+              : (
+                  <div className="mb-3">
+                    <label className={labelCls}>发送时间（北京时间，发完自动关闭）</label>
+                    <input
+                      type="datetime-local"
+                      className={inputCls}
+                      value={sendAtToLocalInput(email.sendAt)}
+                      min={sendAtToLocalInput(Date.now())}
+                      onChange={e => setEmail("sendAt", localInputToSendAt(e.target.value))}
+                    />
+                  </div>
+                )}
+
+            <div className="text-xs op-50">
+              {email.scheduleMode === "daily"
+                ? "服务器每天到点用 DeepSeek 生成口播稿，发到上面所有收件邮箱。"
+                : "到指定时间点后发送一次，发完自动关闭定时。"}
+              {" "}
+              实际触发由 GitHub Actions 调度，可能延迟最多 30 分钟。
+            </div>
+          </>
+        )}
+      </div>
+
+      {error && (
+        <div className="p-2 text-sm text-red-500 bg-red-500/10 rounded">
+          <span className="i-ph:warning-circle inline-block align-middle mr-1" />
+          {error}
+        </div>
+      )}
+      {okMsg && (
+        <div className="p-2 text-sm text-green-600 dark:text-green-400 bg-green-500/10 rounded">
+          <span className="i-ph:check-circle inline-block align-middle mr-1" />
+          {okMsg}
+        </div>
+      )}
+
+      <div className="flex justify-end mt-1">
+        {email.enabled
+          ? (
+              <button
+                type="button"
+                onClick={onScheduledSend}
+                disabled={busy}
+                className="px-5 py-2 rounded bg-primary/20 hover:bg-primary/30 text-sm font-bold disabled:op-50 disabled:cursor-not-allowed flex items-center gap-1"
+              >
+                <span className="i-ph:clock" />
+                {busy ? "保存中…" : "定时发送"}
+              </button>
+            )
+          : (
+              <button
+                type="button"
+                onClick={onImmediateSend}
+                disabled={!canSend || busy}
+                className="px-5 py-2 rounded bg-primary/20 hover:bg-primary/30 text-sm font-bold disabled:op-50 disabled:cursor-not-allowed flex items-center gap-1"
+              >
+                <span className="i-ph:paper-plane-tilt" />
+                {busy ? (phase || "处理中…") : "发送"}
+              </button>
+            )}
+      </div>
     </div>
   )
 }

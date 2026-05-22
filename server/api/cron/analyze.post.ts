@@ -1,4 +1,3 @@
-import { getHistoryTable } from "#/database/history"
 import { getSettingsTable } from "#/database/settings"
 import { sendEmail } from "#/utils/email"
 import { generateScript } from "#/utils/generate-script"
@@ -8,8 +7,7 @@ export default defineEventHandler(async (event) => {
   const dryRun = getQuery(event).dryRun === "true"
 
   const settingsTable = await getSettingsTable()
-  const historyTable = await getHistoryTable()
-  if (!settingsTable || !historyTable) {
+  if (!settingsTable) {
     throw createError({ statusCode: 500, message: "数据库未就绪" })
   }
 
@@ -71,16 +69,6 @@ export default defineEventHandler(async (event) => {
       emailError = String(e?.message ?? e).slice(0, 500)
     }
   }
-
-  await historyTable.insert({
-    generatedAt: now,
-    text: result.fullText,
-    model: settings.llmModel,
-    newsCount: result.newsCount,
-    sentTo: dryRun ? null : settings.toEmail,
-    emailStatus,
-    emailError,
-  })
 
   if (!dryRun && emailStatus === "sent") {
     if (settings.scheduleMode === "once") {

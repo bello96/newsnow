@@ -1,4 +1,3 @@
-import { atom } from "jotai"
 import { atomWithStorage, createJSONStorage } from "jotai/utils"
 
 export type ScheduleMode = "daily" | "once"
@@ -43,17 +42,6 @@ const DEFAULT_SETTINGS: LLMSettings = {
   email: DEFAULT_EMAIL,
 }
 
-export interface HistoryRow {
-  id: number
-  generatedAt: number
-  text: string
-  model: string | null
-  newsCount: number | null
-  sentTo: string | null
-  emailStatus: string
-  emailError: string | null
-}
-
 // 兼容旧版 localStorage：
 // - 旧多 Provider 结构（providers.deepseek / activeProvider）→ 单一 llm
 // - 旧单个 toEmail → toEmails[]
@@ -79,7 +67,7 @@ function migrate(raw: any): LLMSettings {
       toEmails,
       scheduleMode: email.scheduleMode === "once" ? "once" : "daily",
       sendHour: typeof email.sendHour === "number" ? email.sendHour : 7,
-      sendMinute: email.sendMinute === 30 ? 30 : 0,
+      sendMinute: typeof email.sendMinute === "number" ? email.sendMinute : 0,
       sendAt: typeof email.sendAt === "number" ? email.sendAt : null,
     },
   }
@@ -98,4 +86,3 @@ export const llmSettingsAtom = atomWithStorage<LLMSettings>(
   DEFAULT_SETTINGS,
   migratingStorage,
 )
-export const historyAtom = atom<HistoryRow[]>([])

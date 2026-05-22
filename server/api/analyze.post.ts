@@ -1,4 +1,3 @@
-import { getHistoryTable } from "#/database/history"
 import { generateScript } from "#/utils/generate-script"
 
 interface AnalyzeBody {
@@ -21,19 +20,6 @@ export default defineEventHandler(async (event) => {
   const model = (body && body.model) || "deepseek-v4-pro"
 
   const result = await generateScript({ apiKey: llmKey, baseUrl, model })
-
-  const historyTable = await getHistoryTable()
-  if (historyTable) {
-    await historyTable.insert({
-      generatedAt: Date.now(),
-      text: result.fullText,
-      model,
-      newsCount: result.newsCount,
-      sentTo: null,
-      emailStatus: "skipped",
-      emailError: null,
-    })
-  }
 
   return {
     text: result.fullText,

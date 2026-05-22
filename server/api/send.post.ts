@@ -1,4 +1,3 @@
-import { getHistoryTable } from "#/database/history"
 import { normalizeRecipients, sendEmail } from "#/utils/email"
 import { splitTitle } from "#/utils/generate-script"
 import { getBeijingNow } from "#/utils/time"
@@ -34,19 +33,6 @@ export default defineEventHandler(async (event) => {
   } catch (e: any) {
     emailStatus = "failed"
     emailError = String(e?.message ?? e).slice(0, 500)
-  }
-
-  const historyTable = await getHistoryTable()
-  if (historyTable) {
-    await historyTable.insert({
-      generatedAt: now,
-      text: rawText,
-      model: null,
-      newsCount: null,
-      sentTo: emails.join(","),
-      emailStatus,
-      emailError,
-    })
   }
 
   if (emailStatus === "failed") {
