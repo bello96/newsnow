@@ -1,6 +1,7 @@
 /* eslint-disable */
 
 declare module 'glob:./sources/{*.ts,**/index.ts}' {
+  export const aihot: typeof import('./sources/aihot')
   export const cls: typeof import('./sources/cls/index')
   export const coolapk: typeof import('./sources/coolapk/index')
   export const douyin: typeof import('./sources/douyin')

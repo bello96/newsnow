@@ -25,7 +25,7 @@ export const originSources = {
     title: "实时热搜",
     type: "hottest",
     column: "china",
-    color: "red",
+    color: "yellow",
     interval: Time.Realtime,
     home: "https://weibo.com",
   },
@@ -57,7 +57,7 @@ export const originSources = {
     name: "今日头条",
     type: "hottest",
     column: "china",
-    color: "red",
+    color: "pink",
     home: "https://www.toutiao.com",
   },
   thepaper: {
