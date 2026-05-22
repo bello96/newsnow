@@ -1,5 +1,6 @@
 import { getHistoryTable } from "#/database/history"
 import { sendEmail } from "#/utils/email"
+import { splitTitle } from "#/utils/generate-script"
 
 const BEIJING_OFFSET_MS = 8 * 3600 * 1000
 const EMAIL_RE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/
@@ -13,8 +14,8 @@ interface SendBody {
 export default defineEventHandler(async (event) => {
   const body = await readBody<SendBody>(event).catch<SendBody>(() => ({}))
 
-  const text = (body.text ?? "").trim()
-  if (!text) {
+  const rawText = (body.text ?? "").trim()
+  if (!rawText) {
     throw createError({ statusCode: 400, message: "发送内容为空，请先生成口播稿" })
   }
 
@@ -30,8 +31,9 @@ export default defineEventHandler(async (event) => {
 
   const now = Date.now()
   const today = new Date(now + BEIJING_OFFSET_MS).toISOString().slice(0, 10)
-  const subject = `新闻速递 ${today}`
-  const emailText = `${text}\n\n———————————\n本邮件由「信息速递员」手动发送。`
+  const { title, body: scriptBody } = splitTitle(rawText)
+  const subject = title || `新闻速递 ${today}`
+  const emailText = `${scriptBody}\n\n———————————\n本邮件由「信息速递员」手动发送。`
 
   let emailStatus: "sent" | "failed" = "sent"
   let emailError: string | null = null
@@ -46,7 +48,7 @@ export default defineEventHandler(async (event) => {
   if (historyTable) {
     await historyTable.insert({
       generatedAt: now,
-      text,
+      text: rawText,
       model: null,
       newsCount: null,
       sentTo: emails.join(","),
