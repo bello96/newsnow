@@ -5,7 +5,7 @@ import { currentColumnIDAtom } from "~/atoms"
 export function NavBar() {
   const currentId = useAtomValue(currentColumnIDAtom)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const onColumnRoute = !pathname.startsWith("/summary")
+  const onColumnRoute = !pathname.startsWith("/analyze")
   return (
     <span
       className={$([
@@ -27,7 +27,7 @@ export function NavBar() {
         </Link>
       ))}
       <Link
-        to="/summary"
+        to="/analyze"
         className="px-2 hover:(bg-primary/10 rounded-md) cursor-pointer transition-all"
         inactiveProps={{ className: "op-70 dark:op-90" }}
         activeProps={{ className: "color-primary font-bold" }}

@@ -61,7 +61,7 @@ export default defineEventHandler(async (event) => {
   if (!dryRun) {
     try {
       const subject = result.title || `新闻速递 ${today}`
-      const emailText = `${result.body}\n\n———————————\n本邮件由「信息速递员」根据您的订阅设置自动生成发送。\n如需停止接收，请前往 https://new.dengjiabei.cn/summary 关闭定时发送。`
+      const emailText = `${result.body}\n\n———————————\n本邮件由「信息速递员」根据您的订阅设置自动生成发送。\n如需停止接收，请前往 https://new.dengjiabei.cn/analyze 关闭定时发送。`
       await sendEmail({ to: settings.toEmail, subject, text: emailText })
       emailStatus = "sent"
     } catch (e: any) {

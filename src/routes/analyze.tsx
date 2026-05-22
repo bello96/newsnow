@@ -18,7 +18,7 @@ const labelCls = "block text-xs op-70 mb-1"
 const btnCls =
   "px-4 py-2 rounded bg-primary/20 hover:bg-primary/30 text-sm font-bold disabled:op-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
 
-export const Route = createFileRoute("/summary")({ component: SummaryPage })
+export const Route = createFileRoute("/analyze")({ component: AnalyzePage })
 
 interface AnalyzeResult {
   text: string
@@ -158,7 +158,7 @@ function ResultDialog({
   )
 }
 
-function SummaryPage() {
+function AnalyzePage() {
   const [settings, setSettings] = useAtom(llmSettingsAtom)
   const [dailyTime, setDailyTime] = useState(`${pad(settings.email.sendHour)}:${pad(settings.email.sendMinute)}`)
 

@@ -11,15 +11,15 @@
 // Import Routes
 
 import { Route as rootRoute } from './routes/__root'
-import { Route as SummaryImport } from './routes/summary'
+import { Route as AnalyzeImport } from './routes/analyze'
 import { Route as ColumnImport } from './routes/$column'
 import { Route as IndexImport } from './routes/index'
 
 // Create/Update Routes
 
-const SummaryRoute = SummaryImport.update({
-  id: '/summary',
-  path: '/summary',
+const AnalyzeRoute = AnalyzeImport.update({
+  id: '/analyze',
+  path: '/analyze',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -53,11 +53,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ColumnImport
       parentRoute: typeof rootRoute
     }
-    '/summary': {
-      id: '/summary'
-      path: '/summary'
-      fullPath: '/summary'
-      preLoaderRoute: typeof SummaryImport
+    '/analyze': {
+      id: '/analyze'
+      path: '/analyze'
+      fullPath: '/analyze'
+      preLoaderRoute: typeof AnalyzeImport
       parentRoute: typeof rootRoute
     }
   }
@@ -68,41 +68,41 @@ declare module '@tanstack/react-router' {
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$column': typeof ColumnRoute
-  '/summary': typeof SummaryRoute
+  '/analyze': typeof AnalyzeRoute
 }
 
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$column': typeof ColumnRoute
-  '/summary': typeof SummaryRoute
+  '/analyze': typeof AnalyzeRoute
 }
 
 export interface FileRoutesById {
   __root__: typeof rootRoute
   '/': typeof IndexRoute
   '/$column': typeof ColumnRoute
-  '/summary': typeof SummaryRoute
+  '/analyze': typeof AnalyzeRoute
 }
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$column' | '/summary'
+  fullPaths: '/' | '/$column' | '/analyze'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$column' | '/summary'
-  id: '__root__' | '/' | '/$column' | '/summary'
+  to: '/' | '/$column' | '/analyze'
+  id: '__root__' | '/' | '/$column' | '/analyze'
   fileRoutesById: FileRoutesById
 }
 
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ColumnRoute: typeof ColumnRoute
-  SummaryRoute: typeof SummaryRoute
+  AnalyzeRoute: typeof AnalyzeRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ColumnRoute: ColumnRoute,
-  SummaryRoute: SummaryRoute,
+  AnalyzeRoute: AnalyzeRoute,
 }
 
 export const routeTree = rootRoute
@@ -117,7 +117,7 @@ export const routeTree = rootRoute
       "children": [
         "/",
         "/$column",
-        "/summary"
+        "/analyze"
       ]
     },
     "/": {
@@ -126,8 +126,8 @@ export const routeTree = rootRoute
     "/$column": {
       "filePath": "$column.tsx"
     },
-    "/summary": {
-      "filePath": "summary.tsx"
+    "/analyze": {
+      "filePath": "analyze.tsx"
     }
   }
 }
