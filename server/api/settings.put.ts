@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
   if (typeof body.sendHour === "number" && body.sendHour >= 0 && body.sendHour <= 23) {
     partial.sendHour = body.sendHour
   }
-  if (typeof body.sendMinute === "number" && (body.sendMinute === 0 || body.sendMinute === 30)) {
+  if (typeof body.sendMinute === "number" && body.sendMinute >= 0 && body.sendMinute <= 59) {
     partial.sendMinute = body.sendMinute
   }
   if (body.scheduleMode === "daily" || body.scheduleMode === "once") {
