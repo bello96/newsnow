@@ -12,9 +12,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/
 // 每天发送时间 HH:MM（24 小时制）
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/
 
-const inputCls = "w-full p-2 border border-primary/20 rounded bg-zinc-200/60 dark:bg-zinc-700/40 text-sm focus:outline-none focus:border-primary transition-colors"
+const inputCls =
+  "w-full p-2 border border-primary/20 rounded bg-zinc-200/60 dark:bg-zinc-700/40 text-sm focus:outline-none focus:border-primary transition-colors"
 const labelCls = "block text-xs op-70 mb-1"
-const btnCls = "px-4 py-2 rounded bg-primary/20 hover:bg-primary/30 text-sm font-bold disabled:op-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+const btnCls =
+  "px-4 py-2 rounded bg-primary/20 hover:bg-primary/30 text-sm font-bold disabled:op-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
 
 export const Route = createFileRoute("/summary")({ component: SummaryPage })
 
@@ -51,7 +53,14 @@ function localInputToSendAt(s: string): number | null {
 }
 
 // 结果弹框：渲染口播稿 + 复制 + 发送邮件
-function ResultDialog({ result, recipientCount, onClose, onSend, sending, sendMsg }: {
+function ResultDialog({
+  result,
+  recipientCount,
+  onClose,
+  onSend,
+  sending,
+  sendMsg,
+}: {
   result: AnalyzeResult
   recipientCount: number
   onClose: () => void
@@ -75,7 +84,7 @@ function ResultDialog({ result, recipientCount, onClose, onSend, sending, sendMs
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
         className="bg-base rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-primary/15">
           <h3 className="text-lg font-bold flex items-center gap-2">
@@ -97,7 +106,11 @@ function ResultDialog({ result, recipientCount, onClose, onSend, sending, sendMs
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
-              a: ({ children, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer">{children}</a>,
+              a: ({ children, ...props }) => (
+                <a {...props} target="_blank" rel="noopener noreferrer">
+                  {children}
+                </a>
+              ),
             }}
           >
             {result.text}
@@ -105,7 +118,11 @@ function ResultDialog({ result, recipientCount, onClose, onSend, sending, sendMs
         </article>
 
         <div className="flex items-center gap-3 flex-wrap p-4 border-t border-primary/15">
-          <button type="button" onClick={copy} className="px-3 py-1.5 rounded hover:bg-primary/10 text-sm flex items-center gap-1">
+          <button
+            type="button"
+            onClick={copy}
+            className="px-3 py-1.5 rounded hover:bg-primary/10 text-sm flex items-center gap-1"
+          >
             <span className="i-ph:copy" />
             {copied ? "已复制 ✓" : "复制原文"}
           </button>
@@ -114,7 +131,9 @@ function ResultDialog({ result, recipientCount, onClose, onSend, sending, sendMs
             {sending ? "发送中…" : `发送邮件（${recipientCount}）`}
           </button>
           {sendMsg && (
-            <span className={`text-sm flex items-center gap-1 ${sendMsg.ok ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
+            <span
+              className={`text-sm flex items-center gap-1 ${sendMsg.ok ? "text-green-600 dark:text-green-400" : "text-red-500"}`}
+            >
               <span className={sendMsg.ok ? "i-ph:check-circle" : "i-ph:warning-circle"} />
               {sendMsg.text}
             </span>
@@ -153,7 +172,7 @@ function SummaryPage() {
   }
 
   function cleanEmails(): string[] {
-    return email.toEmails.map(e => e.trim()).filter(Boolean)
+    return email.toEmails.map((e) => e.trim()).filter(Boolean)
   }
 
   // 校验收件邮箱：合法返回清洗后的列表，否则抛错
@@ -162,7 +181,7 @@ function SummaryPage() {
     if (cleaned.length === 0) {
       throw new Error("请至少填写一个收件邮箱")
     }
-    const bad = cleaned.find(e => !EMAIL_RE.test(e))
+    const bad = cleaned.find((e) => !EMAIL_RE.test(e))
     if (bad) {
       throw new Error(`收件邮箱格式无效：${bad}`)
     }
@@ -290,9 +309,10 @@ function SummaryPage() {
       setSettings({ ...settings, email: { ...email, toEmails: recipients, sendHour, sendMinute } })
       setScheduleMsg({
         ok: true,
-        text: email.scheduleMode === "daily"
-          ? `已开启定时发送：每天 ${pad(sendHour)}:${pad(sendMinute)}`
-          : "已开启定时发送：到点发送一次",
+        text:
+          email.scheduleMode === "daily"
+            ? `已开启定时发送：每天 ${pad(sendHour)}:${pad(sendMinute)}`
+            : "已开启定时发送：到点发送一次",
       })
     } catch (e: any) {
       setScheduleMsg({ ok: false, text: e?.message || "保存失败，请重试" })
@@ -305,7 +325,7 @@ function SummaryPage() {
     <div className="max-w-3xl mx-auto p-4 flex flex-col gap-4">
       <h2 className="text-xl font-bold flex items-center gap-2">
         <span className="i-ph:robot" />
-        信息速递员 · 口播稿
+        新闻抓取分析 · 口播稿
       </h2>
 
       <div className="grid gap-4 md:grid-cols-2 items-start">
@@ -322,19 +342,19 @@ function SummaryPage() {
               type="password"
               className={inputCls}
               value={cfg.apiKey}
-              onChange={e => setCfg("apiKey", e.target.value)}
+              onChange={(e) => setCfg("apiKey", e.target.value)}
               placeholder="sk-..."
             />
           </div>
 
           <div>
             <label className={labelCls}>Model</label>
-            <select
-              className={inputCls}
-              value={cfg.model}
-              onChange={e => setCfg("model", e.target.value)}
-            >
-              {DEEPSEEK_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+            <select className={inputCls} value={cfg.model} onChange={(e) => setCfg("model", e.target.value)}>
+              {DEEPSEEK_MODELS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
               {!DEEPSEEK_MODELS.includes(cfg.model) && (
                 <option value={cfg.model}>
                   {cfg.model}
@@ -344,12 +364,7 @@ function SummaryPage() {
             </select>
           </div>
 
-          <button
-            type="button"
-            onClick={onAnalyze}
-            disabled={analyzing || !cfg.apiKey.trim()}
-            className={btnCls}
-          >
+          <button type="button" onClick={onAnalyze} disabled={analyzing || !cfg.apiKey.trim()} className={btnCls}>
             <span className={analyzing ? "i-ph:circle-dashed animate-spin" : "i-ph:magic-wand"} />
             {analyzing ? "分析中…" : "立即分析"}
           </button>
@@ -385,13 +400,7 @@ function SummaryPage() {
           </h3>
 
           <div>
-            <label className={labelCls}>
-              收件邮箱（最多
-              {" "}
-              {MAX_RECIPIENTS}
-              {" "}
-              个 · 手动 / 定时共用）
-            </label>
+            <label className={labelCls}>收件邮箱（最多 {MAX_RECIPIENTS} 个 · 手动 / 定时共用）</label>
             <div className="flex flex-col gap-2">
               {email.toEmails.map((addr, i) => {
                 // 简单的可增删字符串列表，按 index 操作即可
@@ -411,7 +420,12 @@ function SummaryPage() {
                     />
                     <button
                       type="button"
-                      onClick={() => setEmail("toEmails", email.toEmails.filter((_, j) => j !== i))}
+                      onClick={() =>
+                        setEmail(
+                          "toEmails",
+                          email.toEmails.filter((_, j) => j !== i),
+                        )
+                      }
                       className="shrink-0 w-8 h-8 flex items-center justify-center rounded op-50 hover:op-100 hover:text-red-500 hover:bg-red-500/10 transition-colors"
                       aria-label="删除该邮箱"
                     >
@@ -433,34 +447,31 @@ function SummaryPage() {
             </div>
           </div>
 
-          <label className={$([
-            "flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-colors",
-            email.enabled ? "bg-primary/15" : "bg-primary/5 hover:bg-primary/10",
-          ])}
+          <label
+            className={$([
+              "flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-colors",
+              email.enabled ? "bg-primary/15" : "bg-primary/5 hover:bg-primary/10",
+            ])}
           >
-            <input
-              type="checkbox"
-              checked={email.enabled}
-              onChange={e => setEmail("enabled", e.target.checked)}
-            />
+            <input type="checkbox" checked={email.enabled} onChange={(e) => setEmail("enabled", e.target.checked)} />
             <span className="text-sm font-medium flex items-center gap-1">
               <span className="i-ph:clock" />
               开启定时发送
             </span>
             <span className="ml-auto text-xs">
-              {email.enabled
-                ? <span className="color-primary">● 已勾选</span>
-                : <span className="op-50">○ 关闭</span>}
+              {email.enabled ? <span className="color-primary">● 已勾选</span> : <span className="op-50">○ 关闭</span>}
             </span>
           </label>
 
           {email.enabled && (
             <>
               <div className="flex gap-2">
-                {([
-                  { id: "daily", label: "每天", icon: "i-ph:repeat" },
-                  { id: "once", label: "一次", icon: "i-ph:calendar-check" },
-                ] as const).map(m => (
+                {(
+                  [
+                    { id: "daily", label: "每天", icon: "i-ph:repeat" },
+                    { id: "once", label: "一次", icon: "i-ph:calendar-check" },
+                  ] as const
+                ).map((m) => (
                   <button
                     key={m.id}
                     type="button"
@@ -478,36 +489,34 @@ function SummaryPage() {
                 ))}
               </div>
 
-              {email.scheduleMode === "daily"
-                ? (
-                    <div>
-                      <label className={labelCls}>每天发送时间（24 小时制，如 09:00）</label>
-                      <input
-                        type="text"
-                        className={inputCls}
-                        value={dailyTime}
-                        onChange={(e) => {
-                          setScheduleMsg(null)
-                          setDailyTime(e.target.value)
-                        }}
-                        placeholder="09:00"
-                        maxLength={5}
-                        inputMode="numeric"
-                      />
-                    </div>
-                  )
-                : (
-                    <div>
-                      <label className={labelCls}>发送时间（北京时间，发完自动关闭）</label>
-                      <input
-                        type="datetime-local"
-                        className={inputCls}
-                        value={sendAtToLocalInput(email.sendAt)}
-                        min={sendAtToLocalInput(Date.now())}
-                        onChange={e => setEmail("sendAt", localInputToSendAt(e.target.value))}
-                      />
-                    </div>
-                  )}
+              {email.scheduleMode === "daily" ? (
+                <div>
+                  <label className={labelCls}>每天发送时间（24 小时制，如 09:00）</label>
+                  <input
+                    type="text"
+                    className={inputCls}
+                    value={dailyTime}
+                    onChange={(e) => {
+                      setScheduleMsg(null)
+                      setDailyTime(e.target.value)
+                    }}
+                    placeholder="09:00"
+                    maxLength={5}
+                    inputMode="numeric"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className={labelCls}>发送时间（北京时间，发完自动关闭）</label>
+                  <input
+                    type="datetime-local"
+                    className={inputCls}
+                    value={sendAtToLocalInput(email.sendAt)}
+                    min={sendAtToLocalInput(Date.now())}
+                    onChange={(e) => setEmail("sendAt", localInputToSendAt(e.target.value))}
+                  />
+                </div>
+              )}
 
               <div className="text-xs op-50">
                 服务器到点用 DeepSeek 自动生成并发送，实际由 GitHub Actions 调度，可能延迟最多 30 分钟。
@@ -515,18 +524,15 @@ function SummaryPage() {
             </>
           )}
 
-          <button
-            type="button"
-            onClick={onSaveSchedule}
-            disabled={savingSchedule}
-            className={btnCls}
-          >
+          <button type="button" onClick={onSaveSchedule} disabled={savingSchedule} className={btnCls}>
             <span className="i-ph:clock" />
-            {savingSchedule ? "保存中…" : (email.enabled ? "开启定时发送" : "停用定时发送")}
+            {savingSchedule ? "保存中…" : email.enabled ? "开启定时发送" : "停用定时发送"}
           </button>
 
           {scheduleMsg && (
-            <div className={`p-2 text-sm rounded flex items-center gap-1 ${scheduleMsg.ok ? "text-green-600 dark:text-green-400 bg-green-500/10" : "text-red-500 bg-red-500/10"}`}>
+            <div
+              className={`p-2 text-sm rounded flex items-center gap-1 ${scheduleMsg.ok ? "text-green-600 dark:text-green-400 bg-green-500/10" : "text-red-500 bg-red-500/10"}`}
+            >
               <span className={scheduleMsg.ok ? "i-ph:check-circle" : "i-ph:warning-circle"} />
               {scheduleMsg.text}
             </div>
