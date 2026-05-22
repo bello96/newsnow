@@ -13,7 +13,7 @@
 import { Route as rootRoute } from './routes/__root'
 import { Route as SummaryImport } from './routes/summary'
 import { Route as IndexImport } from './routes/index'
-import { Route as CColumnImport } from './routes/c.$column'
+import { Route as ColumnImport } from './routes/$column'
 
 // Create/Update Routes
 
@@ -29,9 +29,9 @@ const IndexRoute = IndexImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
-const CColumnRoute = CColumnImport.update({
-  id: '/c/$column',
-  path: '/c/$column',
+const ColumnRoute = ColumnImport.update({
+  id: '/$column',
+  path: '/$column',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -53,11 +53,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SummaryImport
       parentRoute: typeof rootRoute
     }
-    '/c/$column': {
-      id: '/c/$column'
-      path: '/c/$column'
-      fullPath: '/c/$column'
-      preLoaderRoute: typeof CColumnImport
+    '/$column': {
+      id: '/$column'
+      path: '/$column'
+      fullPath: '/$column'
+      preLoaderRoute: typeof ColumnImport
       parentRoute: typeof rootRoute
     }
   }
@@ -68,41 +68,41 @@ declare module '@tanstack/react-router' {
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/summary': typeof SummaryRoute
-  '/c/$column': typeof CColumnRoute
+  '/$column': typeof ColumnRoute
 }
 
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/summary': typeof SummaryRoute
-  '/c/$column': typeof CColumnRoute
+  '/$column': typeof ColumnRoute
 }
 
 export interface FileRoutesById {
   __root__: typeof rootRoute
   '/': typeof IndexRoute
   '/summary': typeof SummaryRoute
-  '/c/$column': typeof CColumnRoute
+  '/$column': typeof ColumnRoute
 }
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/summary' | '/c/$column'
+  fullPaths: '/' | '/summary' | '/$column'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/summary' | '/c/$column'
-  id: '__root__' | '/' | '/summary' | '/c/$column'
+  to: '/' | '/summary' | '/$column'
+  id: '__root__' | '/' | '/summary' | '/$column'
   fileRoutesById: FileRoutesById
 }
 
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SummaryRoute: typeof SummaryRoute
-  CColumnRoute: typeof CColumnRoute
+  ColumnRoute: typeof ColumnRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SummaryRoute: SummaryRoute,
-  CColumnRoute: CColumnRoute,
+  ColumnRoute: ColumnRoute,
 }
 
 export const routeTree = rootRoute
@@ -117,7 +117,7 @@ export const routeTree = rootRoute
       "children": [
         "/",
         "/summary",
-        "/c/$column"
+        "/$column"
       ]
     },
     "/": {
@@ -126,8 +126,8 @@ export const routeTree = rootRoute
     "/summary": {
       "filePath": "summary.tsx"
     },
-    "/c/$column": {
-      "filePath": "c.$column.tsx"
+    "/$column": {
+      "filePath": "$column.tsx"
     }
   }
 }

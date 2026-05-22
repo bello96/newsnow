@@ -16,7 +16,7 @@ export function NavBar() {
       {fixedColumnIds.map((columnId) => (
         <Link
           key={columnId}
-          to="/c/$column"
+          to="/$column"
           params={{ column: columnId }}
           className={$(
             "px-2 hover:(bg-primary/10 rounded-md) cursor-pointer transition-all",

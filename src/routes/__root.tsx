@@ -39,8 +39,8 @@ function RootComponent() {
       >
         <header
           className={$([
-            "grid items-center py-4 px-5",
-            "lg:(py-6)",
+            "grid items-center py-2 px-5",
+            "lg:(py-3)",
             "sticky top-0 z-10 backdrop-blur-md",
           ])}
           style={{
