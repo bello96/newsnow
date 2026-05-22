@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useAtom } from "jotai"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { DEEPSEEK_BASE_URL, DEEPSEEK_MODELS, MAX_RECIPIENTS, llmSettingsAtom } from "~/atoms/settings"
-import type { EmailConfig, LLMConfig } from "~/atoms/settings"
+import type { EmailConfig, LLMConfig, ScheduleMode } from "~/atoms/settings"
 import { apiFetch, llmFetch } from "~/utils/api"
 
 // 收件邮箱白名单正则（域名分段不含点，避免超线性回溯）
@@ -24,6 +24,20 @@ interface AnalyzeResult {
   text: string
   newsCount: number
   articleHits: number
+}
+
+// 服务器上「已生效」的定时任务状态（GET /api/settings，不含 apiKey）
+interface ServerStatus {
+  enabled: number
+  scheduleMode: ScheduleMode
+  sendHour: number
+  sendMinute: number
+  sendAt: number | null
+  toEmails: string[]
+  hasLlmKey: boolean
+  llmModel: string
+  lastSentDate: string | null
+  updatedAt: number
 }
 
 interface Msg {
@@ -159,6 +173,47 @@ function SummaryPage() {
   const [savingSchedule, setSavingSchedule] = useState(false)
   const [scheduleMsg, setScheduleMsg] = useState<Msg | null>(null)
 
+  const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null)
+  const [statusLoading, setStatusLoading] = useState(true)
+
+  // 加载服务器真实状态，并用「已生效的定时设置」校准草稿（apiKey / 邮箱不动）
+  useEffect(() => {
+    let alive = true
+    async function load() {
+      try {
+        const s = await apiFetch<ServerStatus>("settings")
+        if (!alive) {
+          return
+        }
+        setServerStatus(s)
+        setSettings((prev) => ({
+          ...prev,
+          email: {
+            ...prev.email,
+            enabled: !!s.enabled,
+            scheduleMode: s.scheduleMode,
+            sendHour: s.sendHour,
+            sendMinute: s.sendMinute,
+            sendAt: s.sendAt,
+          },
+        }))
+        setDailyTime(`${pad(s.sendHour)}:${pad(s.sendMinute)}`)
+      } catch {
+        if (alive) {
+          setServerStatus(null)
+        }
+      } finally {
+        if (alive) {
+          setStatusLoading(false)
+        }
+      }
+    }
+    void load()
+    return () => {
+      alive = false
+    }
+  }, [setSettings])
+
   const cfg = settings.llm
   const email = settings.email
 
@@ -186,6 +241,61 @@ function SummaryPage() {
       throw new Error(`收件邮箱格式无效：${bad}`)
     }
     return cleaned
+  }
+
+  // 拉取服务器最新状态，刷新顶部「当前定时任务」徽标
+  async function refreshStatus() {
+    try {
+      const s = await apiFetch<ServerStatus>("settings")
+      setServerStatus(s)
+    } catch {
+      // 拉取失败则保留旧状态
+    }
+  }
+
+  // 草稿与服务器已生效设置是否不一致（有未保存修改）
+  function scheduleDirty(): boolean {
+    if (!serverStatus) {
+      return false
+    }
+    if (email.enabled !== !!serverStatus.enabled) {
+      return true
+    }
+    if (!email.enabled) {
+      return false
+    }
+    if (email.scheduleMode !== serverStatus.scheduleMode) {
+      return true
+    }
+    if (cleanEmails().join(",") !== serverStatus.toEmails.join(",")) {
+      return true
+    }
+    if (email.scheduleMode === "daily") {
+      const m = TIME_RE.exec(dailyTime.trim())
+      const h = m ? Number(m[1]) : email.sendHour
+      const min = m ? Number(m[2]) : email.sendMinute
+      return h !== serverStatus.sendHour || min !== serverStatus.sendMinute
+    }
+    return (email.sendAt ?? null) !== (serverStatus.sendAt ?? null)
+  }
+
+  // 顶部「当前定时任务」徽标文案
+  function statusLabel(): string {
+    if (statusLoading) {
+      return "正在读取服务器定时状态…"
+    }
+    if (!serverStatus) {
+      return "无法读取服务器状态，请刷新重试"
+    }
+    if (!serverStatus.enabled) {
+      return "当前未开启定时任务"
+    }
+    const n = serverStatus.toEmails.length
+    if (serverStatus.scheduleMode === "daily") {
+      return `当前定时任务：每天 ${pad(serverStatus.sendHour)}:${pad(serverStatus.sendMinute)} → ${n} 个邮箱`
+    }
+    const at = serverStatus.sendAt ? sendAtToLocalInput(serverStatus.sendAt).replace("T", " ") : "未设时间"
+    return `当前定时任务：一次性 ${at} → ${n} 个邮箱`
   }
 
   // 左栏：立即分析（仅生成，不发送）
@@ -247,7 +357,8 @@ function SummaryPage() {
       setSavingSchedule(true)
       try {
         await apiFetch("settings", { method: "PUT", body: { enabled: 0 } })
-        setScheduleMsg({ ok: true, text: "已停用定时发送" })
+        await refreshStatus()
+        setScheduleMsg({ ok: true, text: "已停用定时发送，服务器上的定时任务已清除" })
       } catch (e: any) {
         setScheduleMsg({ ok: false, text: e?.message || "保存失败，请重试" })
       } finally {
@@ -292,6 +403,17 @@ function SummaryPage() {
 
     setSavingSchedule(true)
     try {
+      // 真实校验 key 有效性，避免定时任务凌晨用错 key 静默失败
+      try {
+        await llmFetch("validate-key", apiKey, {
+          method: "POST",
+          body: { baseUrl: DEEPSEEK_BASE_URL },
+        })
+      } catch (e: any) {
+        setScheduleMsg({ ok: false, text: e?.data?.message || e?.message || "API Key 校验失败，请检查后重试" })
+        return
+      }
+
       await apiFetch<{ ok: boolean }>("settings", {
         method: "PUT",
         body: {
@@ -307,6 +429,7 @@ function SummaryPage() {
         },
       })
       setSettings({ ...settings, email: { ...email, toEmails: recipients, sendHour, sendMinute } })
+      await refreshStatus()
       setScheduleMsg({
         ok: true,
         text:
@@ -396,8 +519,31 @@ function SummaryPage() {
         <section className="border border-primary/15 rounded-lg p-4 flex flex-col gap-3">
           <h3 className="text-sm font-bold op-80 flex items-center gap-1">
             <span className="i-ph:envelope-simple" />
-            邮件投递
+            邮件投递（定时）
           </h3>
+
+          {/* 服务器真实状态：只反映已保存生效的定时任务，与下方草稿区分 */}
+          <div className="text-xs rounded-md px-3 py-2 bg-primary/5 flex items-start gap-2">
+            <span
+              className={$([
+                "mt-0.5 shrink-0",
+                statusLoading
+                  ? "i-ph:circle-dashed animate-spin"
+                  : serverStatus?.enabled
+                    ? "i-ph:check-circle text-green-600 dark:text-green-400"
+                    : "i-ph:moon op-60",
+              ])}
+            />
+            <div className="flex flex-col gap-0.5">
+              <span className="font-medium">{statusLabel()}</span>
+              {serverStatus && serverStatus.enabled === 1 && serverStatus.lastSentDate && (
+                <span className="op-50">
+                  上次发送日期：
+                  {serverStatus.lastSentDate}
+                </span>
+              )}
+            </div>
+          </div>
 
           <div>
             <label className={labelCls}>收件邮箱（最多 {MAX_RECIPIENTS} 个 · 手动 / 定时共用）</label>
@@ -458,9 +604,7 @@ function SummaryPage() {
               <span className="i-ph:clock" />
               开启定时发送
             </span>
-            <span className="ml-auto text-xs">
-              {email.enabled ? <span className="color-primary">● 已勾选</span> : <span className="op-50">○ 关闭</span>}
-            </span>
+            <span className="ml-auto text-xs op-50">{email.enabled ? "草稿：开" : "草稿：关"}</span>
           </label>
 
           {email.enabled && (
@@ -524,9 +668,16 @@ function SummaryPage() {
             </>
           )}
 
+          {!statusLoading && scheduleDirty() && (
+            <div className="text-xs flex items-center gap-1 text-amber-600 dark:text-amber-400">
+              <span className="i-ph:warning shrink-0" />
+              有未保存的修改，点下方按钮后才会生效
+            </div>
+          )}
+
           <button type="button" onClick={onSaveSchedule} disabled={savingSchedule} className={btnCls}>
             <span className="i-ph:clock" />
-            {savingSchedule ? "保存中…" : email.enabled ? "开启定时发送" : "停用定时发送"}
+            {savingSchedule ? "处理中…" : email.enabled ? "开启定时发送" : "停用定时发送"}
           </button>
 
           {scheduleMsg && (
