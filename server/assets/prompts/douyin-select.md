@@ -12,7 +12,7 @@
 ...
 ```
 
-源名包括：zhihu / weibo / coolapk / wallstreetcn / douyin / toutiao / thepaper / cls / sspai / juejin / ifeng / tencent。
+源名包括：zhihu / weibo / coolapk / wallstreetcn / douyin / toutiao / thepaper / cls / sspai / ifeng / tencent / aihot。
 
 ## 二、选题标准
 

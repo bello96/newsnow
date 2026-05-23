@@ -39,7 +39,7 @@ export const originSources = {
   },
   wallstreetcn: {
     name: "华尔街见闻",
-    color: "blue",
+    color: "indigo",
     column: "finance",
     home: "https://wallstreetcn.com/",
     type: "hottest",
@@ -50,7 +50,7 @@ export const originSources = {
     name: "抖音",
     type: "hottest",
     column: "china",
-    color: "gray",
+    color: "cyan",
     home: "https://www.douyin.com",
   },
   toutiao: {
@@ -66,7 +66,7 @@ export const originSources = {
     type: "hottest",
     column: "china",
     title: "热榜",
-    color: "gray",
+    color: "teal",
     home: "https://www.thepaper.cn",
   },
   cls: {
@@ -80,21 +80,14 @@ export const originSources = {
   sspai: {
     name: "少数派",
     column: "tech",
-    color: "red",
+    color: "rose",
     type: "hottest",
     home: "https://sspai.com",
-  },
-  juejin: {
-    name: "稀土掘金",
-    column: "tech",
-    color: "blue",
-    type: "hottest",
-    home: "https://juejin.cn",
   },
   ifeng: {
     name: "凤凰网",
     column: "china",
-    color: "red",
+    color: "orange",
     type: "hottest",
     title: "热点资讯",
     home: "https://www.ifeng.com",
@@ -102,7 +95,7 @@ export const originSources = {
   tencent: {
     name: "腾讯新闻",
     column: "china",
-    color: "blue",
+    color: "sky",
     home: "https://news.qq.com/tag/aEWqxLtdgmQ=",
     type: "hottest",
     title: "综合早报",

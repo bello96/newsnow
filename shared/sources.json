@@ -12,7 +12,7 @@
     "type": "hottest",
     "column": "china",
     "home": "https://weibo.com",
-    "color": "red",
+    "color": "yellow",
     "interval": 120000,
     "title": "实时热搜"
   },
@@ -30,7 +30,7 @@
     "type": "hottest",
     "column": "finance",
     "home": "https://wallstreetcn.com/",
-    "color": "blue",
+    "color": "indigo",
     "interval": 1800000,
     "title": "最热"
   },
@@ -39,7 +39,7 @@
     "type": "hottest",
     "column": "china",
     "home": "https://www.douyin.com",
-    "color": "gray",
+    "color": "cyan",
     "interval": 600000
   },
   "toutiao": {
@@ -47,7 +47,7 @@
     "type": "hottest",
     "column": "china",
     "home": "https://www.toutiao.com",
-    "color": "red",
+    "color": "pink",
     "interval": 600000
   },
   "thepaper": {
@@ -55,7 +55,7 @@
     "type": "hottest",
     "column": "china",
     "home": "https://www.thepaper.cn",
-    "color": "gray",
+    "color": "teal",
     "interval": 1800000,
     "title": "热榜"
   },
@@ -73,15 +73,7 @@
     "type": "hottest",
     "column": "tech",
     "home": "https://sspai.com",
-    "color": "red",
-    "interval": 600000
-  },
-  "juejin": {
-    "name": "稀土掘金",
-    "type": "hottest",
-    "column": "tech",
-    "home": "https://juejin.cn",
-    "color": "blue",
+    "color": "rose",
     "interval": 600000
   },
   "ifeng": {
@@ -89,7 +81,7 @@
     "type": "hottest",
     "column": "china",
     "home": "https://www.ifeng.com",
-    "color": "red",
+    "color": "orange",
     "interval": 600000,
     "title": "热点资讯"
   },
@@ -98,7 +90,7 @@
     "type": "hottest",
     "column": "china",
     "home": "https://news.qq.com/tag/aEWqxLtdgmQ=",
-    "color": "blue",
+    "color": "sky",
     "interval": 1800000,
     "title": "综合早报"
   },
