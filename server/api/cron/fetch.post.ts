@@ -28,6 +28,10 @@ export default defineEventHandler(async (event) => {
 
   const ok = results.filter(r => r.status === "ok").length
   const failed = results.filter(r => r.status === "error").length
-  logger.success(`cron fetch: ${ok} ok / ${failed} failed`)
-  return { ok, failed, now, results }
+
+  // 清理已不在源列表里的归档行（删源后自动清掉孤儿数据，如已移除的 juejin）
+  const pruned = await archive.pruneSources(ids)
+
+  logger.success(`cron fetch: ${ok} ok / ${failed} failed, pruned ${pruned} orphan rows`)
+  return { ok, failed, pruned, now, results }
 })

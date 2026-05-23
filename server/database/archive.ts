@@ -91,6 +91,19 @@ export class Archive {
   async cleanup(cutoffMs: number) {
     await this.db.prepare(`DELETE FROM news_archive WHERE first_seen < ?`).run(cutoffMs)
   }
+
+  // 删除已不在源列表里的归档行（删源后自动清掉孤儿数据，如已移除的 juejin）。
+  // validIds 为空时不动，避免误清空整张表。
+  async pruneSources(validIds: SourceID[]): Promise<number> {
+    if (!validIds.length) {
+      return 0
+    }
+    const placeholders = validIds.map(() => "?").join(",")
+    const res: any = await this.db
+      .prepare(`DELETE FROM news_archive WHERE source_id NOT IN (${placeholders})`)
+      .run(...validIds)
+    return res?.changes ?? res?.meta?.changes ?? 0
+  }
 }
 
 export async function getArchiveTable() {

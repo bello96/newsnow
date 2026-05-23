@@ -61,4 +61,19 @@ describe("archive", () => {
     const rows = await archive.range(0, 9999, ["zhihu"])
     expect(rows[0].extra).toBe(JSON.stringify({ info: "hot", diff: 5 }))
   })
+
+  it("pruneSources 删除不在源列表里的归档行", async () => {
+    await archive.upsert("zhihu", [{ id: "a", title: "x", url: "u" }], 1000)
+    await archive.upsert("weibo", [{ id: "b", title: "y", url: "u" }], 1000)
+    await archive.pruneSources(["zhihu"])
+    const rows = await archive.range(0, 9999)
+    expect(rows.map(r => r.sourceId)).toEqual(["zhihu"])
+  })
+
+  it("pruneSources 源列表为空时不动（安全护栏）", async () => {
+    await archive.upsert("zhihu", [{ id: "a", title: "x", url: "u" }], 1000)
+    await archive.pruneSources([])
+    const rows = await archive.range(0, 9999)
+    expect(rows).toHaveLength(1)
+  })
 })
