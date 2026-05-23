@@ -1,13 +1,14 @@
-import { getDouyinSelectPrompt, getDouyinWritePrompt } from "#/prompts/douyin"
+import { getDouyinSelectPrompt, getDouyinShortlistPrompt, getDouyinWritePrompt } from "#/prompts/douyin"
 
-// 返回口播稿生成的两份约束文档（选题 prompt + 写稿规范），供前端查看。
+// 返回口播稿生成的约束文档（初筛 + 选题 + 写稿规范），供前端查看。
 export default defineEventHandler(async () => {
   try {
-    const [select, write] = await Promise.all([
+    const [shortlist, select, write] = await Promise.all([
+      getDouyinShortlistPrompt(),
       getDouyinSelectPrompt(),
       getDouyinWritePrompt(),
     ])
-    return { select, write }
+    return { shortlist, select, write }
   } catch (e: any) {
     throw createError({ statusCode: 500, message: e?.message || "读取约束文档失败" })
   }

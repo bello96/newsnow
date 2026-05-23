@@ -69,12 +69,14 @@ interface ArchiveItem {
   firstSeen: number
 }
 interface ArchiveData {
+  total?: number // 精简模式下为原始条数（> count 表示已 AI 精简）
   count: number
   items: ArchiveItem[]
 }
 
-// 两份约束文档（GET /api/prompts）
+// 约束文档（GET /api/prompts）：初筛 + 选题 + 写稿
 interface PromptData {
+  shortlist: string
   select: string
   write: string
 }
@@ -157,12 +159,19 @@ function ArchiveDialog({
   const selectAllRef = useRef<HTMLInputElement>(null)
 
   const keyOf = (it: ArchiveItem) => `${it.sourceId}-${it.newsId}`
+  const llmKey = apiKey.trim()
 
   useEffect(() => {
     let alive = true
     async function load() {
       try {
-        const d = await apiFetch<ArchiveData>("archive")
+        // 有 key：拉取后用 DeepSeek 初筛去重（几百条 → 最多 50 条）；无 key：直接拉全部
+        const d = llmKey
+          ? await llmFetch<ArchiveData>("shortlist", llmKey, {
+            method: "POST",
+            body: { baseUrl: DEEPSEEK_BASE_URL, model },
+          })
+          : await apiFetch<ArchiveData>("archive")
         if (alive) {
           setData(d)
           // 默认全选
@@ -182,7 +191,7 @@ function ArchiveDialog({
     return () => {
       alive = false
     }
-  }, [])
+  }, [llmKey, model])
 
   const total = data?.items.length ?? 0
 
@@ -242,7 +251,7 @@ function ArchiveDialog({
     body = (
       <div className="text-sm op-60 flex items-center gap-2">
         <span className="i-ph:circle-dashed animate-spin" />
-        拉取中…
+        {llmKey ? "DeepSeek 精简去重中…（从今日全部新闻里筛出最多 50 条，约十几秒）" : "拉取中…"}
       </div>
     )
   } else if (err) {
@@ -256,10 +265,23 @@ function ArchiveDialog({
     body = (
       <>
         <div className="text-sm op-70 mb-3">
-          今日已归档
-          {" "}
-          <b className="color-primary">{data.count}</b>
-          {" 条，勾选要分析的新闻（默认全选）"}
+          {data.total && data.total > data.count ? (
+            <>
+              已用 DeepSeek 从
+              {" "}
+              <b>{data.total}</b>
+              {" 条精简去重为 "}
+              <b className="color-primary">{data.count}</b>
+              {" 条，勾选要分析的新闻（默认全选）"}
+            </>
+          ) : (
+            <>
+              今日已归档
+              {" "}
+              <b className="color-primary">{data.count}</b>
+              {" 条，勾选要分析的新闻（默认全选）"}
+            </>
+          )}
         </div>
         {data.count === 0 ? (
           <div className="text-sm op-50">今日暂无归档，等自动抓取任务跑过一次后再试。</div>
@@ -398,6 +420,7 @@ function PromptDialog({ onClose }: { onClose: () => void }) {
       <div className="flex flex-col gap-4">
         {(
           [
+            { key: "shortlist", label: "初筛去重 prompt · douyin-shortlist.md", text: data.shortlist },
             { key: "select", label: "选题 prompt · douyin-select.md", text: data.select },
             { key: "write", label: "写稿规范 · douyin.md", text: data.write },
           ] as const
@@ -896,7 +919,7 @@ function AnalyzePage() {
           )}
 
           <div className="text-xs op-50">
-            点「立即分析」对今日全部素材生成口播稿；或点右上「拉取汇总」勾选部分新闻再分析，结果均可复制 / 发送邮件。
+            点「立即分析」对今日全部素材生成口播稿；或点右上「拉取汇总」——会先用 DeepSeek 把今日新闻精简去重为最多 50 条，你再勾选分析。结果均可复制 / 发送邮件。
           </div>
         </section>
 

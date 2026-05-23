@@ -15,3 +15,8 @@ export function getDouyinWritePrompt(): Promise<string> {
 export function getDouyinSelectPrompt(): Promise<string> {
   return loadPrompt("douyin-select.md")
 }
+
+// 初筛 prompt：把今日全部标题去重 + 过滤，保留最多 50 条候选，输出 JSON 序号
+export function getDouyinShortlistPrompt(): Promise<string> {
+  return loadPrompt("douyin-shortlist.md")
+}

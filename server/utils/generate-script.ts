@@ -1,6 +1,6 @@
 import { ofetch } from "ofetch"
-import { getArchiveTable } from "#/database/archive"
-import { getDouyinSelectPrompt, getDouyinWritePrompt } from "#/prompts/douyin"
+import { type ArchiveRow, getArchiveTable } from "#/database/archive"
+import { getDouyinSelectPrompt, getDouyinShortlistPrompt, getDouyinWritePrompt } from "#/prompts/douyin"
 import { fetchArticles } from "#/utils/fetch-article"
 import { joinChatCompletionsUrl } from "#/utils/llm-url"
 import { getBeijingMidnightUtcMs } from "#/utils/time"
@@ -105,6 +105,83 @@ function parseSelectJson(raw: string): SelectResult | null {
   } catch {
     return null
   }
+}
+
+export interface ShortlistResult {
+  total: number
+  items: ArchiveRow[]
+}
+
+// 从 LLM 的 {"keep":[...]} 提取有效 1-based 序号（去重、限定范围、上限 50）
+function parseKeepIndices(raw: string, max: number): number[] {
+  if (!raw) {
+    return []
+  }
+  const s = raw.trim()
+  const start = s.indexOf("{")
+  const end = s.lastIndexOf("}")
+  if (start === -1 || end <= start) {
+    return []
+  }
+  try {
+    const obj = JSON.parse(s.slice(start, end + 1))
+    const arr: unknown[] = Array.isArray(obj?.keep) ? obj.keep : []
+    const seen = new Set<number>()
+    const out: number[] = []
+    for (const v of arr) {
+      const n = typeof v === "number" ? v : Number.parseInt(String(v), 10)
+      if (Number.isInteger(n) && n >= 1 && n <= max && !seen.has(n)) {
+        seen.add(n)
+        out.push(n)
+      }
+      if (out.length >= 50) {
+        break
+      }
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+// 初筛去重：把今日全部归档（几百条）交给 LLM 去重 + 过滤，返回最多 50 条候选
+export async function shortlistArchive(cfg: LLMConfig): Promise<ShortlistResult> {
+  if (!cfg.apiKey) {
+    throw createError({ statusCode: 400, message: "LLM API Key 未配置" })
+  }
+  const archiveTable = await getArchiveTable()
+  if (!archiveTable) {
+    throw createError({ statusCode: 500, message: "数据库未就绪" })
+  }
+  const now = Date.now()
+  const todayStart = getBeijingMidnightUtcMs(now)
+  const rows = await archiveTable.range(todayStart, now)
+  if (rows.length === 0) {
+    throw createError({ statusCode: 400, message: "今日尚无归档新闻，请等待自动抓取任务跑过一次后再试" })
+  }
+
+  // 本来就不超过 50 条，无需精简，直接全返回
+  if (rows.length <= 50) {
+    return { total: rows.length, items: rows }
+  }
+
+  const prompt = await getDouyinShortlistPrompt()
+  const numbered = rows.map((r, i) => `${i + 1}. [${r.sourceId}] ${r.title}`).join("\n")
+  const raw = await chat(
+    cfg,
+    [
+      { role: "system", content: prompt },
+      { role: "user", content: `今日新闻列表（共 ${rows.length} 条）：\n${numbered}` },
+    ],
+    { jsonMode: true, maxTokens: 1200 },
+  )
+  const keep = parseKeepIndices(raw, rows.length)
+  if (keep.length === 0) {
+    // 解析失败降级：取前 50 条
+    return { total: rows.length, items: rows.slice(0, 50) }
+  }
+  const items = keep.map(i => rows[i - 1]).filter((r): r is ArchiveRow => Boolean(r))
+  return { total: rows.length, items }
 }
 
 // 拆出稿件第一行的「# 大标题」
