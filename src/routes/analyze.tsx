@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { type ReactNode, useEffect, useState } from "react"
+import { type ReactNode, useEffect, useRef, useState } from "react"
 import { useAtom } from "jotai"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -24,6 +24,21 @@ interface AnalyzeResult {
   text: string
   newsCount: number
   articleHits: number
+}
+
+// 前端勾选后传给 /api/analyze 的素材子集
+interface SelectedItem {
+  sourceId: string
+  title: string
+  url: string
+}
+
+// 调 /api/analyze 生成口播稿；items 为空时后端取今日全部归档
+async function requestAnalyze(apiKey: string, model: string, items?: SelectedItem[]): Promise<AnalyzeResult> {
+  return await llmFetch<AnalyzeResult>("analyze", apiKey, {
+    method: "POST",
+    body: { baseUrl: DEEPSEEK_BASE_URL, model, items },
+  })
 }
 
 // 服务器上「已生效」的定时任务状态（GET /api/settings，不含 apiKey）
@@ -91,12 +106,13 @@ function localInputToSendAt(s: string): number | null {
   return Number.isNaN(ms) ? null : ms
 }
 
-// 通用弹框外壳：遮罩 + 卡片 + 可滚动内容区
-function Modal({ title, icon, onClose, children }: {
+// 通用弹框外壳：遮罩 + 卡片 + 可滚动内容区 + 可选底部操作栏
+function Modal({ title, icon, onClose, children, footer }: {
   title: string
   icon?: string
   onClose: () => void
   children: ReactNode
+  footer?: ReactNode
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -114,16 +130,33 @@ function Modal({ title, icon, onClose, children }: {
           </button>
         </div>
         <div className="overflow-y-auto flex-1 p-4">{children}</div>
+        {footer && <div className="p-4 border-t border-primary/15">{footer}</div>}
       </div>
     </div>
   )
 }
 
-// 拉取汇总弹框：展示今日已归档的新闻素材（口播稿选题来源）
-function ArchiveDialog({ onClose }: { onClose: () => void }) {
+// 拉取汇总弹框：勾选今日归档素材（默认全选）→ 底部「立即分析」生成口播稿
+function ArchiveDialog({
+  apiKey,
+  model,
+  onResult,
+  onClose,
+}: {
+  apiKey: string
+  model: string
+  onResult: (r: AnalyzeResult) => void
+  onClose: () => void
+}) {
   const [data, setData] = useState<ArchiveData | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState("")
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analyzeErr, setAnalyzeErr] = useState("")
+  const selectAllRef = useRef<HTMLInputElement>(null)
+
+  const keyOf = (it: ArchiveItem) => `${it.sourceId}-${it.newsId}`
 
   useEffect(() => {
     let alive = true
@@ -132,6 +165,8 @@ function ArchiveDialog({ onClose }: { onClose: () => void }) {
         const d = await apiFetch<ArchiveData>("archive")
         if (alive) {
           setData(d)
+          // 默认全选
+          setSelected(new Set(d.items.map((it) => `${it.sourceId}-${it.newsId}`)))
         }
       } catch (e: any) {
         if (alive) {
@@ -148,6 +183,59 @@ function ArchiveDialog({ onClose }: { onClose: () => void }) {
       alive = false
     }
   }, [])
+
+  const total = data?.items.length ?? 0
+
+  // 部分勾选时显示半选态（indeterminate 只能由 JS 设置）
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = selected.size > 0 && selected.size < total
+    }
+  }, [selected, total])
+
+  function toggle(key: string) {
+    setAnalyzeErr("")
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setAnalyzeErr("")
+    if (!data) {
+      return
+    }
+    setSelected((prev) => (prev.size < total ? new Set(data.items.map(keyOf)) : new Set()))
+  }
+
+  async function analyze() {
+    if (!data || selected.size === 0) {
+      return
+    }
+    if (!apiKey.trim()) {
+      setAnalyzeErr("请先在左侧填写 DeepSeek API Key")
+      return
+    }
+    const items: SelectedItem[] = data.items
+      .filter((it) => selected.has(keyOf(it)))
+      .map((it) => ({ sourceId: it.sourceId, title: it.title, url: it.url }))
+    setAnalyzing(true)
+    setAnalyzeErr("")
+    try {
+      const r = await requestAnalyze(apiKey.trim(), model, items)
+      onResult(r)
+    } catch (e: any) {
+      setAnalyzeErr(e?.data?.message || e?.message || "分析失败，请重试")
+    } finally {
+      setAnalyzing(false)
+    }
+  }
 
   let body: ReactNode = null
   if (loading) {
@@ -171,35 +259,90 @@ function ArchiveDialog({ onClose }: { onClose: () => void }) {
           今日已归档
           {" "}
           <b className="color-primary">{data.count}</b>
-          {" 条（口播稿将从这些素材里选题）"}
+          {" 条，勾选要分析的新闻（默认全选）"}
         </div>
         {data.count === 0 ? (
           <div className="text-sm op-50">今日暂无归档，等自动抓取任务跑过一次后再试。</div>
         ) : (
-          <ul className="flex flex-col gap-2">
-            {data.items.map((it) => (
-              <li key={`${it.sourceId}-${it.newsId}`} className="text-sm flex items-center gap-2">
-                <span className="shrink-0 op-50 font-mono text-xs">{bjTime(it.firstSeen)}</span>
-                <span className="shrink-0 px-1.5 py-0.5 rounded bg-primary/10 text-xs">{it.sourceId}</span>
-                <a
-                  href={it.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="truncate hover:color-primary"
-                  title={it.title}
-                >
-                  {it.title}
-                </a>
-              </li>
-            ))}
+          <ul className="flex flex-col gap-1">
+            {data.items.map((it) => {
+              const key = keyOf(it)
+              const checked = selected.has(key)
+              return (
+                <li key={key}>
+                  <label
+                    className={$([
+                      "flex items-center gap-2 text-sm rounded px-2 py-1.5 cursor-pointer transition-colors",
+                      checked ? "bg-primary/10" : "hover:bg-primary/5",
+                    ])}
+                  >
+                    <input type="checkbox" className="shrink-0" checked={checked} onChange={() => toggle(key)} />
+                    <span className="shrink-0 op-50 font-mono text-xs">{bjTime(it.firstSeen)}</span>
+                    <span className="shrink-0 px-1.5 py-0.5 rounded bg-primary/10 text-xs">{it.sourceId}</span>
+                    <span className="truncate" title={it.title}>
+                      {it.title}
+                    </span>
+                    <a
+                      href={it.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 ml-auto op-40 hover:op-100 hover:color-primary"
+                      title="打开原文"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span className="i-ph:arrow-square-out" />
+                    </a>
+                  </label>
+                </li>
+              )
+            })}
           </ul>
         )}
       </>
     )
   }
 
+  const footer
+    = data && data.count > 0
+      ? (
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={total > 0 && selected.size === total}
+                onChange={toggleAll}
+              />
+              全选
+            </label>
+            <span className="text-xs op-60">
+              已选
+              {" "}
+              {selected.size}
+              {" / "}
+              {total}
+            </span>
+            {analyzeErr && (
+              <span className="text-xs text-red-500 flex items-center gap-1">
+                <span className="i-ph:warning-circle" />
+                {analyzeErr}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={analyze}
+              disabled={analyzing || selected.size === 0 || !apiKey.trim()}
+              className={$([btnCls, "ml-auto"])}
+            >
+              <span className={analyzing ? "i-ph:circle-dashed animate-spin" : "i-ph:magic-wand"} />
+              {analyzing ? "分析中…" : `立即分析（${selected.size}）`}
+            </button>
+          </div>
+        )
+      : null
+
   return (
-    <Modal title="今日新闻汇总" icon="i-ph:database" onClose={onClose}>
+    <Modal title="今日新闻汇总" icon="i-ph:database" onClose={onClose} footer={footer}>
       {body}
     </Modal>
   )
@@ -515,7 +658,7 @@ function AnalyzePage() {
     return `当前定时任务：一次性 ${at} → ${n} 个邮箱`
   }
 
-  // 左栏：立即分析（仅生成，不发送）
+  // 左栏：立即分析全部今日素材（仅生成，不发送）
   async function onAnalyze() {
     setAnalyzeErr("")
     const apiKey = cfg.apiKey.trim()
@@ -525,10 +668,7 @@ function AnalyzePage() {
     }
     setAnalyzing(true)
     try {
-      const data = await llmFetch<AnalyzeResult>("analyze", apiKey, {
-        method: "POST",
-        body: { baseUrl: DEEPSEEK_BASE_URL, model: cfg.model },
-      })
+      const data = await requestAnalyze(apiKey, cfg.model)
       setResult(data)
       setSendMsg(null)
       setResultOpen(true)
@@ -537,6 +677,14 @@ function AnalyzePage() {
     } finally {
       setAnalyzing(false)
     }
+  }
+
+  // 拉取汇总弹框分析完成：收下结果，关弹框、开结果框（复用复制 / 发送邮件）
+  function handleArchiveResult(r: AnalyzeResult) {
+    setResult(r)
+    setSendMsg(null)
+    setArchiveOpen(false)
+    setResultOpen(true)
   }
 
   // 弹框：手动发送当前分析结果（独立于定时任务）
@@ -748,7 +896,7 @@ function AnalyzePage() {
           )}
 
           <div className="text-xs op-50">
-            点「立即分析」让大模型从今日累积的新闻里挑出爆点生成口播稿，弹框中可查看并发送。
+            点「立即分析」对今日全部素材生成口播稿；或点右上「拉取汇总」勾选部分新闻再分析，结果均可复制 / 发送邮件。
           </div>
         </section>
 
@@ -939,7 +1087,14 @@ function AnalyzePage() {
         />
       )}
 
-      {archiveOpen && <ArchiveDialog onClose={() => setArchiveOpen(false)} />}
+      {archiveOpen && (
+        <ArchiveDialog
+          apiKey={cfg.apiKey}
+          model={cfg.model}
+          onResult={handleArchiveResult}
+          onClose={() => setArchiveOpen(false)}
+        />
+      )}
       {promptOpen && <PromptDialog onClose={() => setPromptOpen(false)} />}
     </div>
   )

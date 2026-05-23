@@ -1,8 +1,15 @@
 import { generateScript } from "#/utils/generate-script"
 
+interface AnalyzeItem {
+  sourceId?: string
+  title?: string
+  url?: string
+}
+
 interface AnalyzeBody {
   baseUrl?: string
   model?: string
+  items?: AnalyzeItem[]
 }
 
 export default defineEventHandler(async (event) => {
@@ -19,7 +26,15 @@ export default defineEventHandler(async (event) => {
   const baseUrl = (body && body.baseUrl) || "https://api.deepseek.com"
   const model = (body && body.model) || "deepseek-v4-pro"
 
-  const result = await generateScript({ apiKey: llmKey, baseUrl, model })
+  // 前端勾选的素材子集（可选）：清洗后限量，未传时由 generateScript 取今日全部归档
+  const candidates = Array.isArray(body?.items)
+    ? body.items
+        .filter(it => it && typeof it.url === "string" && it.url && typeof it.title === "string" && it.title)
+        .slice(0, 500)
+        .map(it => ({ sourceId: String(it.sourceId ?? ""), title: String(it.title), url: String(it.url) }))
+    : undefined
+
+  const result = await generateScript({ apiKey: llmKey, baseUrl, model }, candidates)
 
   return {
     text: result.fullText,

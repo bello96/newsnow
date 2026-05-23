@@ -124,18 +124,25 @@ export function splitTitle(raw: string): { title: string | null, body: string } 
 }
 
 // 两阶段生成：① 选题 → ② 抓正文 → ③ 写稿
-export async function generateScript(cfg: LLMConfig): Promise<GenerateResult> {
+export async function generateScript(cfg: LLMConfig, candidates?: PickedItem[]): Promise<GenerateResult> {
   if (!cfg.apiKey) {
     throw createError({ statusCode: 400, message: "LLM API Key 未配置" })
   }
-  const archiveTable = await getArchiveTable()
-  if (!archiveTable) {
-    throw createError({ statusCode: 500, message: "数据库未就绪" })
-  }
 
-  const now = Date.now()
-  const todayStart = getBeijingMidnightUtcMs(now)
-  const items = await archiveTable.range(todayStart, now)
+  // 优先使用调用方手选的素材（前端勾选）；未传则取今日全部归档
+  let items: PickedItem[]
+  if (candidates && candidates.length > 0) {
+    items = candidates
+  } else {
+    const archiveTable = await getArchiveTable()
+    if (!archiveTable) {
+      throw createError({ statusCode: 500, message: "数据库未就绪" })
+    }
+    const now = Date.now()
+    const todayStart = getBeijingMidnightUtcMs(now)
+    const rows = await archiveTable.range(todayStart, now)
+    items = rows.map(r => ({ sourceId: r.sourceId, title: r.title, url: r.url }))
+  }
   if (items.length === 0) {
     throw createError({ statusCode: 400, message: "今日尚无归档新闻，请等待自动抓取任务跑过一次后再试" })
   }
