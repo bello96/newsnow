@@ -166,21 +166,30 @@ export async function shortlistArchive(cfg: LLMConfig): Promise<ShortlistResult>
   }
 
   const prompt = await getDouyinShortlistPrompt()
-  const numbered = rows.map((r, i) => `${i + 1}. [${r.sourceId}] ${r.title}`).join("\n")
+  // 打乱顺序再喂给 LLM：range 默认「最新在前」，原样给会让模型偏向只挑列表开头（最新）的几条
+  const shuffled = [...rows]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const tmp = shuffled[i]
+    shuffled[i] = shuffled[j]
+    shuffled[j] = tmp
+  }
+  const numbered = shuffled.map((r, i) => `${i + 1}. [${r.sourceId}] ${r.title}`).join("\n")
   const raw = await chat(
     cfg,
     [
       { role: "system", content: prompt },
-      { role: "user", content: `今日新闻列表（共 ${rows.length} 条）：\n${numbered}` },
+      { role: "user", content: `今日新闻列表（共 ${shuffled.length} 条）：\n${numbered}` },
     ],
     { jsonMode: true, maxTokens: 1200 },
   )
-  const keep = parseKeepIndices(raw, rows.length)
+  const keep = parseKeepIndices(raw, shuffled.length)
   if (keep.length === 0) {
-    // 解析失败降级：取前 50 条
-    return { total: rows.length, items: rows.slice(0, 50) }
+    // 解析失败降级：取已打乱后的前 50 条（跨全天随机，不会只取最新）
+    logger.warn("shortlist: LLM 选取解析失败，降级随机取样 50 条")
+    return { total: rows.length, items: shuffled.slice(0, 50) }
   }
-  const items = keep.map(i => rows[i - 1]).filter((r): r is ArchiveRow => Boolean(r))
+  const items = keep.map(i => shuffled[i - 1]).filter((r): r is ArchiveRow => Boolean(r))
   return { total: rows.length, items }
 }
 
